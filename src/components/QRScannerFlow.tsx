@@ -48,9 +48,6 @@ export function QRScannerFlow({
 
   useEffect(() => {
     if (step === "SCAN") {
-      // Ensure element exists and scanner isn't already running
-      if (!document.getElementById("reader") || scannerRef.current) return;
-
       // Initialize scanner
       const scanner = new Html5QrcodeScanner(
         "reader",
@@ -58,34 +55,26 @@ export function QRScannerFlow({
         /* verbose= */ false
       );
       
-      scanner.render((decodedText: string) => {
-        // Clear the scanner to remove the UI and stop the camera BEFORE updating state
-        // This prevents the "Cannot read properties of null (reading 'style')" error
-        scanner.clear().then(() => {
-          // Prevent cleanup from trying to clear again
-          if (scannerRef.current === scanner) {
-            scannerRef.current = null;
-          }
-          
-          setScannedCode(decodedText);
-          onScanSuccess(decodedText);
-          
+      scanner.render(async (decodedText: string) => {
+        try {
+          // Clear the scanner to stop the camera and remove UI elements
+          await scanner.clear();
+          scannerRef.current = null;
+        } catch (error) {
+          console.error("Failed to clear scanner:", error);
+        }
+
+        setScannedCode(decodedText);
+        onScanSuccess(decodedText);
+        
+        // Add a delay before changing step to allow DOM cleanup
+        setTimeout(() => {
           if (mode === "LAB") {
             setStep("LIVENESS");
           } else {
             setStep("DONE");
           }
-        }).catch((err) => {
-          console.error("Failed to clear scanner", err);
-          // Proceed anyway
-          setScannedCode(decodedText);
-          onScanSuccess(decodedText);
-          if (mode === "LAB") {
-            setStep("LIVENESS");
-          } else {
-            setStep("DONE");
-          }
-        });
+        }, 300);
       }, (error: any) => {
         // handle scan error if needed
       });
@@ -94,9 +83,7 @@ export function QRScannerFlow({
 
       return () => {
         if (scannerRef.current) {
-          scannerRef.current.clear().catch((err) => {
-             console.warn("Scanner cleanup error", err);
-          });
+          scannerRef.current.clear().catch((err) => console.error("Cleanup error:", err));
           scannerRef.current = null;
         }
       };
