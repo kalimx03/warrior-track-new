@@ -14,9 +14,8 @@ import { ArrowRight, Loader2, Lock, User, Check, X, ShieldAlert } from "lucide-r
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import {
   Dialog,
   DialogContent,
@@ -219,52 +218,37 @@ function ForgotPasswordDialog() {
   );
 }
 
-export default function Auth({ redirectAfterAuth }: AuthProps) {
-  const { signIn } = useAuthActions();
-  const [step, setStep] = useState<"signIn" | "otp" | "forgotPassword">("signIn");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+function Auth({ redirectAfterAuth }: AuthProps = {}) {
+  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
-  
-  // Check if user is already authenticated to redirect
-  const user = useQuery(api.users.viewer);
-  
+  const [password, setPassword] = useState("");
+
   useEffect(() => {
-    if (user) {
-      navigate(redirectAfterAuth || "/dashboard");
+    if (!authLoading && isAuthenticated) {
+      const redirect = redirectAfterAuth || "/";
+      navigate(redirect);
     }
-  }, [user, navigate, redirectAfterAuth]);
+  }, [authLoading, isAuthenticated, navigate, redirectAfterAuth]);
 
-  const handleSignIn = async (formData: FormData) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setIsLoading(true);
-    const emailInput = formData.get("email") as string;
-    const passwordInput = formData.get("password") as string;
-    
-    setEmail(emailInput);
-
     try {
-      if (isSignUp) {
-        await signIn("password", { email: emailInput, password: passwordInput, flow: "signUp" });
-        // Auto-login is handled by the provider, but we can show a success message
-        toast.success("Account created successfully!");
-      } else {
-        await signIn("password", { email: emailInput, password: passwordInput, flow: "signIn" });
-        toast.success("Signed in successfully!");
-      }
+      const formData = new FormData(event.currentTarget);
+      formData.append("flow", isSignUp ? "signUp" : "signIn");
+      await signIn("password", formData);
+      toast.success(isSignUp ? "Account created successfully!" : "Signed in successfully!");
     } catch (error) {
       console.error("Auth error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Authentication failed";
-      toast.error(isSignUp ? "Failed to create account. Email might be taken." : "Invalid credentials.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Authentication failed. Please check your credentials."
+      );
       setIsLoading(false);
     }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget as HTMLFormElement);
-    await handleSignIn(formData);
   };
 
   return (
@@ -379,5 +363,13 @@ export default function Auth({ redirectAfterAuth }: AuthProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuthPage(props: AuthProps) {
+  return (
+    <Suspense>
+      <Auth {...props} />
+    </Suspense>
   );
 }

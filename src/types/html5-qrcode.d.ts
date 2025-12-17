@@ -6,7 +6,5 @@ declare module "html5-qrcode" {
       onError?: (errorMessage: string) => void
     ): void;
     clear(): Promise<void>;
-    pause(shouldPauseVideo?: boolean): void;
-    resume(): void;
   }
 }

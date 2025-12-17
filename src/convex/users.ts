@@ -34,22 +34,6 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
   return await ctx.db.get(userId);
 };
 
-export const viewer = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      return null;
-    }
-    const user = await ctx.db.get(userId);
-    if (!user) {
-      return null;
-    }
-    
-    return user;
-  },
-});
-
 export const updateRole = mutation({
   args: { role: roleValidator },
   handler: async (ctx, args) => {

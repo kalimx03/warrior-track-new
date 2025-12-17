@@ -4,6 +4,7 @@ import { Infer, v } from "convex/values";
 
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
+  ADMIN: "admin",
   USER: "user",
   MEMBER: "member",
   FACULTY: "faculty",
@@ -11,6 +12,7 @@ export const ROLES = {
 } as const;
 
 export const roleValidator = v.union(
+  v.literal(ROLES.ADMIN),
   v.literal(ROLES.USER),
   v.literal(ROLES.MEMBER),
   v.literal(ROLES.FACULTY),
@@ -58,7 +60,6 @@ const schema = defineSchema(
       isActive: v.boolean(),
       isLocked: v.optional(v.boolean()), // New field for pausing attendance
       createdBy: v.id("users"),
-      lastCodeUpdate: v.optional(v.number()),
     }).index("by_course", ["courseId"])
       .index("by_active", ["isActive"]),
 

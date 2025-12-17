@@ -17,12 +17,15 @@ export const mark = mutation({
     if (!session.isActive) throw new Error("Session is not active");
     if (session.isLocked) throw new Error("Session is currently locked by faculty");
 
-    // PIN Expiration Logic for THEORY sessions
+    // PIN Expiration Logic (5 minutes) for THEORY sessions
     if (session.type === "THEORY") {
-      // We no longer enforce a hard session timeout based on start time.
-      // The PIN rotates automatically every 5 minutes via cron.
+      const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+      if (Date.now() > session.startTime + SESSION_TIMEOUT) {
+        throw new Error("Session PIN has expired");
+      }
+      
       if (session.code !== args.code) {
-        throw new Error("Invalid PIN code. The code may have refreshed.");
+        throw new Error("Invalid PIN code");
       }
     }
 

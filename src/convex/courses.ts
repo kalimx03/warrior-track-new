@@ -54,25 +54,6 @@ export const listEnrolled = query({
   },
 });
 
-export const listStudentCourses = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const enrollments = await ctx.db
-      .query("enrollments")
-      .withIndex("by_student", (q) => q.eq("studentId", userId))
-      .collect();
-
-    const courses = await Promise.all(
-      enrollments.map(async (e) => await ctx.db.get(e.courseId))
-    );
-
-    return courses.filter((c) => c !== null);
-  },
-});
-
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
