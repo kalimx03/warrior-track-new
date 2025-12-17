@@ -23,11 +23,23 @@ export const create = mutation({
       await ctx.db.patch(session._id, { isActive: false, endTime: Date.now() });
     }
 
+    // Generate code if not provided
+    let sessionCode = args.code;
+    if (!sessionCode) {
+      if (args.type === "THEORY") {
+        // 6-digit PIN
+        sessionCode = Math.floor(100000 + Math.random() * 900000).toString();
+      } else if (args.type === "LAB") {
+        // UUID-like secret for QR
+        sessionCode = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      }
+    }
+
     const sessionId = await ctx.db.insert("sessions", {
       courseId: args.courseId,
       startTime: Date.now(),
       type: args.type,
-      code: args.code,
+      code: sessionCode,
       isActive: true,
       createdBy: userId,
     });
@@ -63,10 +75,28 @@ export const getActive = query({
 export const getRecent = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
       .order("desc")
-      .take(10);
+      .take(5);
+
+    // Enrich with attendance count
+    const sessionsWithStats = await Promise.all(
+      sessions.map(async (session) => {
+        const attendanceCount = await ctx.db
+          .query("attendance")
+          .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+          .collect()
+          .then((results) => results.length);
+        
+        return {
+          ...session,
+          attendanceCount,
+        };
+      })
+    );
+
+    return sessionsWithStats;
   },
 });

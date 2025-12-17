@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3 } from "lucide-react";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 
 export default function FacultyView() {
@@ -138,6 +138,7 @@ function CreateCourseDialog() {
 
 function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
   const activeSession = useQuery(api.sessions.getActive, { courseId });
+  const recentSessions = useQuery(api.sessions.getRecent, { courseId });
   const createSession = useMutation(api.sessions.create);
   const endSession = useMutation(api.sessions.end);
   const [isLoading, setIsLoading] = useState(false);
@@ -145,8 +146,8 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
   const handleStartSession = async (type: "LAB" | "THEORY") => {
     setIsLoading(true);
     try {
-      const code = type === "THEORY" ? Math.floor(100000 + Math.random() * 900000).toString() : undefined;
-      await createSession({ courseId, type, code });
+      // Code generation is now handled in backend
+      await createSession({ courseId, type });
       toast.success(`${type} Session Deployed`);
     } catch (error) {
       toast.error("Failed to start session");
@@ -184,11 +185,26 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
               <div className="p-4 bg-background rounded-lg border text-center">
                 <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Active Session</div>
                 <div className="text-2xl font-bold text-primary">{activeSession.type}</div>
-                {activeSession.code && (
+                
+                {activeSession.type === "THEORY" && activeSession.code && (
                   <div className="mt-4">
                     <div className="text-sm text-muted-foreground mb-1">Access PIN</div>
                     <div className="text-4xl font-mono font-bold tracking-widest">{activeSession.code}</div>
                     <div className="text-xs text-muted-foreground mt-2">Valid for 5 minutes</div>
+                  </div>
+                )}
+
+                {activeSession.type === "LAB" && activeSession.code && (
+                  <div className="mt-4 flex flex-col items-center">
+                    <div className="text-sm text-muted-foreground mb-2">Scan to Mark Attendance</div>
+                    <div className="bg-white p-2 rounded-lg shadow-sm">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${activeSession.code}`}
+                        alt="Session QR Code"
+                        className="w-32 h-32"
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-2">Warriors must scan this code</div>
                   </div>
                 )}
               </div>
@@ -235,9 +251,36 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
           <CardDescription>Latest session logs</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-sm text-muted-foreground text-center py-8">
-            Select a course to view history
-          </div>
+          {!recentSessions ? (
+            <div className="text-center py-8 text-muted-foreground">Loading history...</div>
+          ) : recentSessions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">No recent sessions found</div>
+          ) : (
+            <div className="space-y-4">
+              {recentSessions.map((session) => (
+                <div key={session._id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${session.type === 'LAB' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                      {session.type === 'LAB' ? <QrCode className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm">{session.type} Session</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(session.startTime).toLocaleDateString()}
+                        <Clock className="h-3 w-3 ml-1" />
+                        {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold">{session.attendanceCount}</div>
+                    <div className="text-xs text-muted-foreground">Present</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

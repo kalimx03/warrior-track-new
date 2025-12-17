@@ -6,8 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function StudentView() {
   const enrolledCourses = useQuery(api.courses.listEnrolled);
@@ -69,18 +77,22 @@ function CourseCard({ course }: { course: any }) {
   const activeSession = useQuery(api.sessions.getActive, { courseId: course._id });
   const markAttendance = useMutation(api.attendance.mark);
   const [pin, setPin] = useState("");
+  const [qrCode, setQrCode] = useState("");
   const [isMarking, setIsMarking] = useState(false);
+  const [isScanOpen, setIsScanOpen] = useState(false);
 
-  const handleMarkAttendance = async () => {
+  const handleMarkAttendance = async (codeToUse?: string) => {
     if (!activeSession) return;
     setIsMarking(true);
     try {
       await markAttendance({ 
         sessionId: activeSession._id,
-        code: activeSession.type === "THEORY" ? pin : undefined
+        code: codeToUse || (activeSession.type === "THEORY" ? pin : undefined)
       });
       toast.success("Attendance Marked! Warrior Present.");
       setPin("");
+      setQrCode("");
+      setIsScanOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to mark attendance");
     } finally {
@@ -137,13 +149,49 @@ function CourseCard({ course }: { course: any }) {
                   maxLength={6}
                   className="text-center tracking-widest font-mono"
                 />
+                <Button className="w-full" onClick={() => handleMarkAttendance()} disabled={isMarking}>
+                  {isMarking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Mark Present
+                </Button>
               </div>
             )}
-            
-            <Button className="w-full" onClick={handleMarkAttendance} disabled={isMarking}>
-              {isMarking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Mark Present
-            </Button>
+
+            {activeSession.type === "LAB" && (
+              <Dialog open={isScanOpen} onOpenChange={setIsScanOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full" variant="outline">
+                    <ScanLine className="mr-2 h-4 w-4" />
+                    Scan QR Code
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Scan Lab QR Code</DialogTitle>
+                    <DialogDescription>
+                      Enter the code from the General's screen to verify your presence.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>QR Code Content</Label>
+                      <Input 
+                        placeholder="Scan or enter code..." 
+                        value={qrCode}
+                        onChange={(e) => setQrCode(e.target.value)}
+                      />
+                    </div>
+                    <Button 
+                      className="w-full" 
+                      onClick={() => handleMarkAttendance(qrCode)} 
+                      disabled={isMarking || !qrCode}
+                    >
+                      {isMarking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Verify & Mark Attendance
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         ) : (
           <div className="p-4 bg-muted/30 rounded-lg border border-dashed text-center text-muted-foreground text-sm">

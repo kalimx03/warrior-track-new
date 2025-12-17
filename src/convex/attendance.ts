@@ -15,9 +15,23 @@ export const mark = mutation({
     if (!session) throw new Error("Session not found");
     if (!session.isActive) throw new Error("Session is not active");
 
+    // PIN Expiration Logic (5 minutes) for THEORY sessions
     if (session.type === "THEORY") {
+      const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+      if (Date.now() > session.startTime + SESSION_TIMEOUT) {
+        throw new Error("Session PIN has expired");
+      }
+      
       if (session.code !== args.code) {
         throw new Error("Invalid PIN code");
+      }
+    }
+
+    // QR Code Logic for LAB sessions
+    if (session.type === "LAB") {
+      // For LAB, the code is the secret embedded in the QR
+      if (session.code && session.code !== args.code) {
+        throw new Error("Invalid QR Code");
       }
     }
 
