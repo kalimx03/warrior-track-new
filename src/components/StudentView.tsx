@@ -105,6 +105,7 @@ function CourseCard({ course }: { course: any }) {
   const percentage = stats?.percentage || 0;
   const isAtRisk = percentage < 75;
   const streak = stats?.currentStreak || 0;
+  const longestStreak = stats?.longestStreak || 0;
 
   return (
     <Card className="elevation-2 border-none overflow-hidden flex flex-col">
@@ -119,12 +120,20 @@ function CourseCard({ course }: { course: any }) {
             <div className={`text-2xl font-bold ${isAtRisk ? 'text-destructive' : 'text-green-600'}`}>
               {percentage.toFixed(0)}%
             </div>
-            {streak > 0 && (
-              <div className="flex items-center justify-end gap-1 text-xs text-orange-500 font-medium mt-1">
-                <Flame className="h-3 w-3 fill-orange-500" />
-                {streak} Day Streak
-              </div>
-            )}
+            <div className="flex flex-col items-end gap-1 mt-1">
+              {streak > 0 && (
+                <div className="flex items-center gap-1 text-xs text-orange-500 font-medium">
+                  <Flame className="h-3 w-3 fill-orange-500" />
+                  {streak} Day Streak
+                </div>
+              )}
+              {longestStreak > 0 && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                  <Trophy className="h-3 w-3" />
+                  Best: {longestStreak} Days
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>

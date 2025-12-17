@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { startOfWeek, startOfMonth, format, isSameWeek, isSameMonth, parseISO } from "date-fns";
 import { FacultySessionHistory } from "./FacultySessionHistory";
@@ -491,6 +491,12 @@ function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
                 tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
+              <ReferenceLine 
+                y={75} 
+                stroke="hsl(var(--destructive))" 
+                strokeDasharray="3 3" 
+                label={{ value: "Risk Threshold (75%)", position: "insideBottomRight", fill: "hsl(var(--destructive))", fontSize: 12 }} 
+              />
               <Area
                 type="monotone"
                 dataKey="attendance"

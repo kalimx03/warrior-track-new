@@ -12,6 +12,7 @@ import { Id } from "@/convex/_generated/dataModel";
 export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> }) {
   const [typeFilter, setTypeFilter] = useState<"ALL" | "LAB" | "THEORY">("ALL");
   const [dateFilter, setDateFilter] = useState<string>("");
+  const [durationFilter, setDurationFilter] = useState<"ALL" | "short" | "long">("ALL");
 
   // Convert date string to timestamp range if present
   const dateRange = dateFilter ? {
@@ -22,6 +23,7 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
   const sessions = useQuery(api.sessions.search, {
     courseId,
     type: typeFilter === "ALL" ? undefined : typeFilter,
+    duration: durationFilter === "ALL" ? undefined : durationFilter,
     ...dateRange,
     limit: 50
   });
@@ -37,8 +39,8 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
             </CardTitle>
             <CardDescription>Search and filter past operations</CardDescription>
           </div>
-          <div className="flex gap-2 items-center">
-            <div className="relative w-[150px]">
+          <div className="flex gap-2 items-center flex-wrap">
+            <div className="relative w-[140px]">
               <Input 
                 type="date" 
                 className="h-8 text-xs"
@@ -47,7 +49,7 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
               />
             </div>
             <Select value={typeFilter} onValueChange={(v: any) => setTypeFilter(v)}>
-              <SelectTrigger className="w-[120px] h-8 text-xs">
+              <SelectTrigger className="w-[110px] h-8 text-xs">
                 <Filter className="h-3 w-3 mr-2" />
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -55,6 +57,17 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
                 <SelectItem value="ALL">All Types</SelectItem>
                 <SelectItem value="THEORY">Theory</SelectItem>
                 <SelectItem value="LAB">Lab</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={durationFilter} onValueChange={(v: any) => setDurationFilter(v)}>
+              <SelectTrigger className="w-[110px] h-8 text-xs">
+                <Clock className="h-3 w-3 mr-2" />
+                <SelectValue placeholder="Duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Any Duration</SelectItem>
+                <SelectItem value="short">&lt; 1 Hour</SelectItem>
+                <SelectItem value="long">&ge; 1 Hour</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -67,6 +80,7 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
               <TableRow className="bg-muted/50">
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Duration</TableHead>
                 <TableHead>Code</TableHead>
                 <TableHead className="text-right">Attendance</TableHead>
                 <TableHead className="text-right">Status</TableHead>
@@ -75,13 +89,13 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
             <TableBody>
               {!sessions ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Loading archives...
                   </TableCell>
                 </TableRow>
               ) : sessions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No sessions found matching criteria
                   </TableCell>
                 </TableRow>
@@ -105,6 +119,13 @@ export function FacultySessionHistory({ courseId }: { courseId: Id<"courses"> })
                         {session.type === 'LAB' ? <QrCode className="h-3 w-3" /> : <Users className="h-3 w-3" />}
                         {session.type}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground">
+                        {session.endTime 
+                          ? `${Math.round((session.endTime - session.startTime) / (1000 * 60))} mins`
+                          : "Active"}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">

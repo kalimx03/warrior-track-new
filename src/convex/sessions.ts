@@ -107,6 +107,7 @@ export const search = query({
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
     type: v.optional(v.union(v.literal("LAB"), v.literal("THEORY"))),
+    duration: v.optional(v.string()), // "short" (< 1hr) or "long" (>= 1hr)
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -120,6 +121,14 @@ export const search = query({
       if (args.startDate && s.startTime < args.startDate) return false;
       if (args.endDate && s.startTime > args.endDate) return false;
       if (args.type && s.type !== args.type) return false;
+      
+      if (args.duration) {
+        if (!s.endTime) return false; // Only filter ended sessions
+        const durationMinutes = (s.endTime - s.startTime) / (1000 * 60);
+        if (args.duration === "short" && durationMinutes >= 60) return false;
+        if (args.duration === "long" && durationMinutes < 60) return false;
+      }
+      
       return true;
     });
 
