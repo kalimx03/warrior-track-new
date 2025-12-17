@@ -50,9 +50,11 @@ export function QRScannerFlow({
 
   // QR Scanner Logic
   useEffect(() => {
+    let isMounted = true;
     if (step === "SCAN") {
       // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
+        if (!isMounted) return;
         if (!document.getElementById("reader")) return;
 
         // Cleanup existing scanner if any
@@ -77,6 +79,8 @@ export function QRScannerFlow({
         scannerRef.current = scanner;
 
         const handleScan = async (decodedText: string) => {
+          if (!isMounted) return;
+          
           // Pause scanning immediately
           try {
             scanner.pause(true);
@@ -93,10 +97,12 @@ export function QRScannerFlow({
             console.error("Failed to clear scanner:", error);
           }
           
-          if (mode === "LAB") {
-            setStep("LIVENESS");
-          } else {
-            setStep("DONE");
+          if (isMounted) {
+            if (mode === "LAB") {
+              setStep("LIVENESS");
+            } else {
+              setStep("DONE");
+            }
           }
         };
 
@@ -106,6 +112,7 @@ export function QRScannerFlow({
       }, 100);
       
       return () => {
+        isMounted = false;
         clearTimeout(timer);
         if (scannerRef.current) {
           try {
