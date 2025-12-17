@@ -69,21 +69,50 @@ export const getStats = query({
     const sessionIds = sessions.map((s) => s._id);
     
     // Get attendance for this student in these sessions
+    const attendances = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", userId))
+      .collect();
+
+    const attendanceSet = new Set(attendances.map(a => a.sessionId));
+
     let presentCount = 0;
-    for (const sessionId of sessionIds) {
-      const attendance = await ctx.db
-        .query("attendance")
-        .withIndex("by_session_and_student", (q) =>
-          q.eq("sessionId", sessionId).eq("studentId", userId)
-        )
-        .first();
-      if (attendance) presentCount++;
+    let currentStreak = 0;
+    let longestStreak = 0;
+    let tempStreak = 0;
+
+    // Sort sessions by time ascending for streak calculation
+    const sortedSessions = sessions.sort((a, b) => a.startTime - b.startTime);
+
+    for (const session of sortedSessions) {
+      if (attendanceSet.has(session._id)) {
+        presentCount++;
+        tempStreak++;
+      } else {
+        if (tempStreak > longestStreak) longestStreak = tempStreak;
+        tempStreak = 0;
+      }
+    }
+    // Check final streak
+    if (tempStreak > longestStreak) longestStreak = tempStreak;
+
+    // Calculate current streak (working backwards from most recent)
+    // We only count streaks for sessions that have happened
+    const pastSessions = sortedSessions.filter(s => s.startTime <= Date.now()).reverse();
+    for (const session of pastSessions) {
+      if (attendanceSet.has(session._id)) {
+        currentStreak++;
+      } else {
+        break;
+      }
     }
 
     return {
       totalSessions: sessions.length,
       attendedSessions: presentCount,
       percentage: sessions.length > 0 ? (presentCount / sessions.length) * 100 : 0,
+      currentStreak,
+      longestStreak,
     };
   },
 });

@@ -13,6 +13,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { startOfWeek, startOfMonth, format, isSameWeek, isSameMonth, parseISO } from "date-fns";
+import { FacultySessionHistory } from "./FacultySessionHistory";
 
 export default function FacultyView() {
   const courses = useQuery(api.courses.listByFaculty);
@@ -38,9 +39,10 @@ export default function FacultyView() {
       </div>
 
       <Tabs defaultValue="sessions" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+        <TabsList className="grid w-full grid-cols-3 max-w-[600px]">
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex items-center gap-4">
@@ -71,6 +73,15 @@ export default function FacultyView() {
           ) : (
             <div className="text-center p-8 text-muted-foreground">
               Select a course to view reports
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="history" className="mt-4">
+          {selectedCourseId ? (
+            <FacultySessionHistory courseId={selectedCourseId as Id<"courses">} />
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              Select a course to view history
             </div>
           )}
         </TabsContent>
@@ -373,6 +384,22 @@ function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
 
   }, [trends, aggregation]);
 
+  // Calculate summary metrics
+  const metrics = useMemo(() => {
+    if (!trends || trends.length === 0) return null;
+    const totalAttendance = trends.reduce((acc, curr) => acc + curr.attendance, 0);
+    const totalPossible = trends.reduce((acc, curr) => acc + curr.total, 0);
+    const avgAttendance = totalPossible > 0 ? (totalAttendance / totalPossible) * 100 : 0;
+    
+    const bestSession = [...trends].sort((a, b) => b.attendance - a.attendance)[0];
+    
+    return {
+      avg: avgAttendance.toFixed(1),
+      best: bestSession ? `${bestSession.attendance}/${bestSession.total}` : "-",
+      total: trends.length
+    };
+  }, [trends]);
+
   if (!trends) return <div className="p-8 text-center text-muted-foreground">Loading trends...</div>;
   if (trends.length === 0) return <div className="p-8 text-center text-muted-foreground">No attendance data available for this period</div>;
 
@@ -423,6 +450,22 @@ function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
         </div>
       </CardHeader>
       <CardContent>
+        {metrics && (
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="p-3 bg-primary/5 rounded-lg border border-primary/10">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">Avg Attendance</div>
+              <div className="text-2xl font-bold text-primary">{metrics.avg}%</div>
+            </div>
+            <div className="p-3 bg-muted/30 rounded-lg border">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">Total Sessions</div>
+              <div className="text-2xl font-bold">{metrics.total}</div>
+            </div>
+            <div className="p-3 bg-green-500/5 rounded-lg border border-green-500/10">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">Best Turnout</div>
+              <div className="text-2xl font-bold text-green-600">{metrics.best}</div>
+            </div>
+          </div>
+        )}
         <div className="h-[300px] w-full">
           <ChartContainer config={chartConfig} className="h-full w-full">
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -432,18 +475,20 @@ function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
                   <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.1} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
               <XAxis 
                 dataKey="date" 
                 tickLine={false} 
                 axisLine={false} 
                 tickMargin={8} 
                 minTickGap={32}
+                tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
               />
               <YAxis 
                 tickLine={false} 
                 axisLine={false} 
                 tickMargin={8} 
+                tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Area

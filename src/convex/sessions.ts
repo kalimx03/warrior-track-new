@@ -100,3 +100,46 @@ export const getRecent = query({
     return sessionsWithStats;
   },
 });
+
+export const search = query({
+  args: { 
+    courseId: v.id("courses"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    type: v.optional(v.union(v.literal("LAB"), v.literal("THEORY"))),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .order("desc")
+      .collect();
+
+    const filtered = sessions.filter(s => {
+      if (args.startDate && s.startTime < args.startDate) return false;
+      if (args.endDate && s.startTime > args.endDate) return false;
+      if (args.type && s.type !== args.type) return false;
+      return true;
+    });
+
+    const limited = filtered.slice(0, args.limit || 20);
+
+    const sessionsWithStats = await Promise.all(
+      limited.map(async (session) => {
+        const attendanceCount = await ctx.db
+          .query("attendance")
+          .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+          .collect()
+          .then((results) => results.length);
+        
+        return {
+          ...session,
+          attendanceCount,
+        };
+      })
+    );
+
+    return sessionsWithStats;
+  },
+});

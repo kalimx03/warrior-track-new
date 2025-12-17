@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar, Clock } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar, Clock, Flame, Trophy } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Dialog,
@@ -104,6 +104,7 @@ function CourseCard({ course }: { course: any }) {
 
   const percentage = stats?.percentage || 0;
   const isAtRisk = percentage < 75;
+  const streak = stats?.currentStreak || 0;
 
   return (
     <Card className="elevation-2 border-none overflow-hidden flex flex-col">
@@ -114,8 +115,16 @@ function CourseCard({ course }: { course: any }) {
             <CardTitle>{course.code}</CardTitle>
             <CardDescription>{course.name}</CardDescription>
           </div>
-          <div className={`text-2xl font-bold ${isAtRisk ? 'text-destructive' : 'text-green-600'}`}>
-            {percentage.toFixed(0)}%
+          <div className="text-right">
+            <div className={`text-2xl font-bold ${isAtRisk ? 'text-destructive' : 'text-green-600'}`}>
+              {percentage.toFixed(0)}%
+            </div>
+            {streak > 0 && (
+              <div className="flex items-center justify-end gap-1 text-xs text-orange-500 font-medium mt-1">
+                <Flame className="h-3 w-3 fill-orange-500" />
+                {streak} Day Streak
+              </div>
+            )}
           </div>
         </div>
       </CardHeader>
