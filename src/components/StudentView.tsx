@@ -35,6 +35,7 @@ import { useEffect, useRef } from "react";
 import { QRScannerFlow } from "./QRScannerFlow";
 import { FaceRegistration } from "./FaceRegistration";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function StudentView() {
   const [activeTab, setActiveTab] = useState("active");
