@@ -46,13 +46,6 @@ export const viewer = query({
       return null;
     }
     
-    // Auto-promote specific admin email if not already admin
-    if (user.email === "admin.sayyed03@gmail.com" && user.role !== "admin") {
-      // Cannot patch in a query, but we can return the admin role to the frontend
-      // The admin backend functions also verify the email explicitly
-      return { ...user, role: "admin" } as any;
-    }
-    
     return user;
   },
 });

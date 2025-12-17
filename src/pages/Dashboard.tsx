@@ -9,12 +9,6 @@ export default function Dashboard() {
   const user = useQuery(api.users.viewer);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user && user.role === "admin") {
-      navigate("/admin-dashboard");
-    }
-  }, [user, navigate]);
-
   if (!user) return null; // Or loading spinner
 
   return (

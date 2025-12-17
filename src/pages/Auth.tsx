@@ -233,11 +233,7 @@ export default function Auth({ redirectAfterAuth }: AuthProps) {
   
   useEffect(() => {
     if (user) {
-      if (user.role === "admin" || user.email === "admin.sayyed03@gmail.com") {
-        navigate("/admin-dashboard");
-      } else {
-        navigate(redirectAfterAuth || "/dashboard");
-      }
+      navigate(redirectAfterAuth || "/dashboard");
     }
   }, [user, navigate, redirectAfterAuth]);
 
@@ -246,15 +242,14 @@ export default function Auth({ redirectAfterAuth }: AuthProps) {
     const emailInput = formData.get("email") as string;
     const passwordInput = formData.get("password") as string;
     
-    // Admin Bypass Check
-    if (emailInput === "admin.sayyed03@gmail.com" && passwordInput === "Admin@123") {
-      setEmail(emailInput);
-    } else {
-      setEmail(emailInput);
-    }
+    setEmail(emailInput);
 
     try {
-      await signIn("password", formData);
+      if (isSignUp) {
+        await signIn("password", { email: emailInput, password: passwordInput, flow: "signUp" });
+      } else {
+        await signIn("password", { email: emailInput, password: passwordInput, flow: "signIn" });
+      }
     } catch (error) {
       toast.error("Authentication failed. Please check your credentials.");
       setIsLoading(false);
