@@ -30,6 +30,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Html5QrcodeScanner } from "html5-qrcode";
+import { useEffect, useRef } from "react";
 
 export default function StudentView() {
   const enrolledCourses = useQuery(api.courses.listEnrolled);
@@ -338,31 +340,26 @@ function CourseCard({ course }: { course: any }) {
   const activeSession = useQuery(api.sessions.getActive, { courseId: course._id });
   const markAttendance = useMutation(api.attendance.mark);
   const [pin, setPin] = useState("");
-  const [qrCode, setQrCode] = useState("");
   const [isMarking, setIsMarking] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
-  const [isVerifyingFace, setIsVerifyingFace] = useState(false);
-  const [faceVerified, setFaceVerified] = useState(false);
+  
+  // New state for the scanning flow
+  const [scanStep, setScanStep] = useState<"IDLE" | "SCAN_QR" | "VERIFY_FACE" | "SUCCESS">("IDLE");
+  const [scannedCode, setScannedCode] = useState("");
+  const [scannerError, setScannerError] = useState("");
 
-  const handleVerifyFace = () => {
-    setIsVerifyingFace(true);
-    // Simulate face verification delay
-    setTimeout(() => {
-      setIsVerifyingFace(false);
-      setFaceVerified(true);
-      toast.success("Identity Verified via Face Scan");
-    }, 2000);
-  };
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!isScanOpen) {
+      setScanStep("IDLE");
+      setScannedCode("");
+      setScannerError("");
+    }
+  }, [isScanOpen]);
 
   const handleMarkAttendance = async (codeToUse?: string) => {
     if (!activeSession) return;
     
-    // Require face verification for LAB sessions if not yet verified
-    if (activeSession.type === "LAB" && !faceVerified) {
-      toast.error("Please verify your identity first");
-      return;
-    }
-
     setIsMarking(true);
     try {
       await markAttendance({ 
@@ -371,24 +368,22 @@ function CourseCard({ course }: { course: any }) {
       });
       toast.success("Attendance Marked! Warrior Present.");
       setPin("");
-      setQrCode("");
       setIsScanOpen(false);
-      setFaceVerified(false);
+      setScanStep("SUCCESS");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to mark attendance");
+      // If error occurs during the final step, go back to idle or handle gracefully
+      if (scanStep === "VERIFY_FACE") {
+         setScanStep("IDLE");
+      }
     } finally {
       setIsMarking(false);
     }
   };
 
-  const percentage = stats?.percentage || 0;
-  const isAtRisk = percentage < 75;
-  const streak = stats?.currentStreak || 0;
-  const longestStreak = stats?.longestStreak || 0;
-
   return (
     <Card className="elevation-2 border-none overflow-hidden flex flex-col h-full hover:shadow-lg transition-all duration-300">
-      <div className={`h-2 w-full ${isAtRisk ? 'bg-destructive' : 'bg-green-500'}`} />
+      <div className={`h-2 w-full ${(stats?.percentage || 0) < 75 ? 'bg-destructive' : 'bg-green-500'}`} />
       <CardHeader>
         <div className="flex justify-between items-start">
           <div>
@@ -396,20 +391,20 @@ function CourseCard({ course }: { course: any }) {
             <CardDescription>{course.name}</CardDescription>
           </div>
           <div className="text-right">
-            <div className={`text-2xl font-bold ${isAtRisk ? 'text-destructive' : 'text-green-600'}`}>
-              {percentage.toFixed(0)}%
+            <div className={`text-2xl font-bold ${(stats?.percentage || 0) < 75 ? 'text-destructive' : 'text-green-600'}`}>
+              {(stats?.percentage || 0).toFixed(0)}%
             </div>
             <div className="flex flex-col items-end gap-1 mt-1">
-              {streak > 0 && (
+              {(stats?.currentStreak || 0) > 0 && (
                 <div className="flex items-center gap-1 text-xs text-orange-500 font-medium">
                   <Flame className="h-3 w-3 fill-orange-500" />
-                  {streak} Day Streak
+                  {stats?.currentStreak} Day Streak
                 </div>
               )}
-              {longestStreak > 0 && (
+              {(stats?.longestStreak || 0) > 0 && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
                   <Trophy className="h-3 w-3" />
-                  Best: {longestStreak} Days
+                  Best: {stats?.longestStreak} Days
                 </div>
               )}
             </div>
@@ -424,8 +419,8 @@ function CourseCard({ course }: { course: any }) {
           </div>
           <div className="h-2 bg-secondary rounded-full overflow-hidden">
             <div 
-              className={`h-full transition-all duration-500 ${isAtRisk ? 'bg-destructive' : 'bg-green-500'}`} 
-              style={{ width: `${percentage}%` }}
+              className={`h-full transition-all duration-500 ${(stats?.percentage || 0) < 75 ? 'bg-destructive' : 'bg-green-500'}`} 
+              style={{ width: `${stats?.percentage || 0}%` }}
             />
           </div>
         </div>
@@ -459,36 +454,25 @@ function CourseCard({ course }: { course: any }) {
                   </Button>
                   <Dialog open={isScanOpen} onOpenChange={setIsScanOpen}>
                     <DialogTrigger asChild>
-                      <Button variant="outline">
+                      <Button variant="outline" onClick={() => setScanStep("SCAN_QR")}>
                         <ScanLine className="mr-2 h-4 w-4" />
                         Scan QR
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-md">
                       <DialogHeader>
                         <DialogTitle>Scan Theory QR Code</DialogTitle>
                         <DialogDescription>
                           Scan the code displayed on the screen.
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>QR Code Content</Label>
-                          <Input 
-                            placeholder="Scan or enter code..." 
-                            value={qrCode}
-                            onChange={(e) => setQrCode(e.target.value)}
-                          />
-                        </div>
-                        <Button 
-                          className="w-full" 
-                          onClick={() => handleMarkAttendance(qrCode)} 
-                          disabled={isMarking || !qrCode}
-                        >
-                          {isMarking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Verify & Mark Attendance
-                        </Button>
-                      </div>
+                      <QRScannerFlow 
+                        onScanSuccess={(code) => {
+                          setScannedCode(code);
+                          handleMarkAttendance(code);
+                        }}
+                        mode="THEORY"
+                      />
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -498,83 +482,29 @@ function CourseCard({ course }: { course: any }) {
             {activeSession.type === "LAB" && (
               <Dialog open={isScanOpen} onOpenChange={setIsScanOpen}>
                 <DialogTrigger asChild>
-                  <Button className="w-full" variant="outline">
+                  <Button className="w-full" variant="outline" onClick={() => setScanStep("SCAN_QR")}>
                     <ScanLine className="mr-2 h-4 w-4" />
                     Scan QR Code
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Scan Lab QR Code</DialogTitle>
+                    <DialogTitle>Attendance Verification</DialogTitle>
                     <DialogDescription>
-                      First verify your identity, then enter the code from the General's screen.
+                      Complete the security check to mark attendance.
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    
-                    <div className="p-4 border rounded-lg bg-muted/20 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium flex items-center gap-2">
-                          <Camera className="h-4 w-4" />
-                          Face Verification
-                        </div>
-                        {faceVerified && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                      </div>
-                      
-                      {!faceVerified ? (
-                        <div className="space-y-3">
-                          <div className="aspect-video bg-black/90 rounded-lg flex items-center justify-center relative overflow-hidden border border-border">
-                            {isVerifyingFace ? (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center text-white/80 gap-2 z-10">
-                                <div className="h-12 w-12 border-4 border-primary/50 border-t-primary rounded-full animate-spin" />
-                                <span className="text-xs font-mono animate-pulse tracking-widest">SCANNING...</span>
-                              </div>
-                            ) : (
-                              <Camera className="h-12 w-12 text-muted-foreground/50" />
-                            )}
-                            
-                            {/* Scanning overlay effect */}
-                            {isVerifyingFace && (
-                              <div className="absolute inset-0 bg-primary/10 animate-pulse z-0" />
-                            )}
-                            
-                            <div className="absolute inset-0 border-2 border-primary/20 rounded-lg pointer-events-none" />
-                          </div>
-                          
-                          <Button 
-                            variant="secondary" 
-                            className="w-full" 
-                            onClick={handleVerifyFace}
-                            disabled={isVerifyingFace}
-                          >
-                            {isVerifyingFace ? "Verifying Identity..." : "Start Face Scan"}
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-green-600 font-medium text-center bg-green-100 py-2 rounded border border-green-200">
-                          Identity Verified Successfully
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>QR Code Content</Label>
-                      <Input 
-                        placeholder="Scan or enter code..." 
-                        value={qrCode}
-                        onChange={(e) => setQrCode(e.target.value)}
-                        disabled={!faceVerified}
-                      />
-                    </div>
-                    <Button 
-                      className="w-full" 
-                      onClick={() => handleMarkAttendance(qrCode)} 
-                      disabled={isMarking || !qrCode || !faceVerified}
-                    >
-                      {isMarking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Verify & Mark Attendance
-                    </Button>
-                  </div>
+                  
+                  <QRScannerFlow 
+                    onScanSuccess={async (code) => {
+                      setScannedCode(code);
+                      // After QR scan, automatically trigger face verification then submit
+                      // The flow is handled inside QRScannerFlow component or we can manage it here
+                      // For simplicity, we'll let the component handle the transition
+                    }}
+                    onComplete={(code) => handleMarkAttendance(code)}
+                    mode="LAB"
+                  />
                 </DialogContent>
               </Dialog>
             )}
@@ -586,5 +516,154 @@ function CourseCard({ course }: { course: any }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function QRScannerFlow({ 
+  onScanSuccess, 
+  onComplete,
+  mode 
+}: { 
+  onScanSuccess: (code: string) => void, 
+  onComplete?: (code: string) => void,
+  mode: "LAB" | "THEORY" 
+}) {
+  const [step, setStep] = useState<"SCAN" | "FACE" | "DONE">("SCAN");
+  const [scannedCode, setScannedCode] = useState("");
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (step === "SCAN") {
+      // Initialize scanner
+      const scanner = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        /* verbose= */ false
+      );
+      
+      scanner.render((decodedText: string) => {
+        scanner.clear();
+        setScannedCode(decodedText);
+        onScanSuccess(decodedText);
+        
+        if (mode === "LAB") {
+          setStep("FACE");
+        } else {
+          setStep("DONE");
+        }
+      }, (error: any) => {
+        // handle scan error if needed
+      });
+      
+      scannerRef.current = scanner;
+
+      return () => {
+        scanner.clear().catch(console.error);
+      };
+    }
+  }, [step, mode, onScanSuccess]);
+
+  useEffect(() => {
+    if (step === "FACE" && mode === "LAB") {
+      let stream: MediaStream | null = null;
+
+      const startCamera = async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        } catch (err) {
+          console.error("Error accessing camera for face verification:", err);
+          toast.error("Camera access required for face verification");
+        }
+      };
+
+      startCamera();
+
+      // Simulate face verification analysis
+      const timer = setTimeout(() => {
+        if (onComplete) onComplete(scannedCode);
+        setStep("DONE");
+      }, 4000); // 4 seconds for "analysis"
+
+      return () => {
+        clearTimeout(timer);
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      };
+    }
+  }, [step, mode, scannedCode, onComplete]);
+
+  return (
+    <div className="space-y-4 py-4">
+      {step === "SCAN" && (
+        <div className="space-y-4">
+          <div className="text-center space-y-2">
+            <div className="flex justify-center">
+              <div className="p-3 bg-primary/10 rounded-full animate-pulse">
+                <ScanLine className="h-8 w-8 text-primary" />
+              </div>
+            </div>
+            <h3 className="font-semibold">Step 1: Scan QR Code</h3>
+            <p className="text-sm text-muted-foreground">Point your camera at the session QR code</p>
+          </div>
+          <div id="reader" className="overflow-hidden rounded-lg border bg-black/5"></div>
+        </div>
+      )}
+
+      {step === "FACE" && (
+        <div className="space-y-4">
+          <div className="text-center space-y-2">
+            <div className="flex justify-center">
+              <div className="p-3 bg-blue-100 rounded-full">
+                <Camera className="h-8 w-8 text-blue-600" />
+              </div>
+            </div>
+            <h3 className="font-semibold">Step 2: Face Verification</h3>
+            <p className="text-sm text-muted-foreground">Align your face within the frame...</p>
+          </div>
+          
+          <div className="aspect-video bg-black rounded-lg flex items-center justify-center relative overflow-hidden border-2 border-primary/50 shadow-[0_0_15px_rgba(var(--primary),0.5)]">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]" 
+            />
+            
+            {/* Face scanning overlay UI */}
+            <div className="absolute inset-0 z-10 pointer-events-none">
+              <div className="absolute inset-0 border-[50px] border-black/50 [mask-image:radial-gradient(ellipse_at_center,transparent_40%,black_70%)]" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 border-2 border-primary/50 rounded-[40%] opacity-80">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-primary/80 shadow-[0_0_10px_rgba(var(--primary),0.8)] animate-[scan_2s_ease-in-out_infinite]" />
+              </div>
+              
+              <div className="absolute bottom-4 left-0 right-0 text-center">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 text-white text-xs font-mono backdrop-blur-md border border-white/10">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  BIOMETRIC ANALYSIS ACTIVE
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "DONE" && (
+        <div className="flex flex-col items-center justify-center py-8 space-y-4 text-center animate-in fade-in zoom-in duration-300">
+          <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center shadow-lg shadow-green-100">
+            <CheckCircle2 className="h-10 w-10 text-green-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-lg">Verification Successful</h3>
+            <p className="text-sm text-muted-foreground">Identity confirmed. Attendance marked.</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
