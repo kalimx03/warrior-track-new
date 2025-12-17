@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck } from "lucide-react";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck, Maximize2 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -307,6 +307,7 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
   const createSession = useMutation(api.sessions.create);
   const endSession = useMutation(api.sessions.end);
   const [isLoading, setIsLoading] = useState(false);
+  const [showFullQR, setShowFullQR] = useState(false);
 
   const handleStartSession = async (type: "LAB" | "THEORY") => {
     setIsLoading(true);
@@ -368,12 +369,15 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                       {activeSession.code}
                     </div>
                     
-                    <div className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border mb-4 relative group cursor-pointer" onClick={() => setShowFullQR(true)}>
                       <img 
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.code}`}
                         alt="Session QR Code"
                         className="w-40 h-40"
                       />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                        <Maximize2 className="text-white h-8 w-8" />
+                      </div>
                     </div>
 
                     <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
@@ -385,12 +389,15 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
 
                 {activeSession.type === "LAB" && activeSession.code && (
                   <div className="mt-4 flex flex-col items-center">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border relative group cursor-pointer" onClick={() => setShowFullQR(true)}>
                       <img 
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.code}`}
                         alt="Session QR Code"
                         className="w-48 h-48"
                       />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                        <Maximize2 className="text-white h-8 w-8" />
+                      </div>
                     </div>
                     <div className="text-sm text-muted-foreground mt-4 font-medium">
                       Scan to verify presence
@@ -398,6 +405,18 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                   </div>
                 )}
               </div>
+
+              <Dialog open={showFullQR} onOpenChange={setShowFullQR}>
+                <DialogContent className="max-w-[80vh] w-full aspect-square flex items-center justify-center">
+                  <div className="bg-white p-8 rounded-xl">
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${activeSession.code}`}
+                      alt="Full Session QR Code"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                </DialogContent>
+              </Dialog>
               
               <div className="flex gap-2">
                 <AttendanceManager sessionId={activeSession._id} />

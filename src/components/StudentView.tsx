@@ -33,14 +33,17 @@ import {
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { useEffect, useRef } from "react";
 import { QRScannerFlow } from "./QRScannerFlow";
+import { FaceRegistration } from "./FaceRegistration";
 
 export default function StudentView() {
   const enrolledCourses = useQuery(api.courses.listEnrolled);
   const allCourses = useQuery(api.courses.listAll);
   const allAttendance = useQuery(api.attendance.getAllStudentAttendance);
+  const currentUser = useQuery(api.users.currentUser);
   const enroll = useMutation(api.courses.enroll);
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [showFaceRegistration, setShowFaceRegistration] = useState(false);
 
   const handleEnroll = async (courseId: Id<"courses">) => {
     setIsEnrolling(true);
@@ -81,7 +84,28 @@ export default function StudentView() {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">Warrior Dashboard</h1>
-        <NotificationsPopover />
+        <div className="flex items-center gap-2">
+          {!currentUser?.faceDescriptor && (
+            <Dialog open={showFaceRegistration} onOpenChange={setShowFaceRegistration}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="animate-pulse">
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Register Face ID
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Register Face ID</DialogTitle>
+                  <DialogDescription>
+                    Secure your account with biometric verification for lab access.
+                  </DialogDescription>
+                </DialogHeader>
+                <FaceRegistration onComplete={() => setShowFaceRegistration(false)} />
+              </DialogContent>
+            </Dialog>
+          )}
+          <NotificationsPopover />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -339,6 +363,7 @@ function NotificationsPopover() {
 function CourseCard({ course }: { course: any }) {
   const stats = useQuery(api.attendance.getStats, { courseId: course._id });
   const activeSession = useQuery(api.sessions.getActive, { courseId: course._id });
+  const currentUser = useQuery(api.users.currentUser);
   const markAttendance = useMutation(api.attendance.mark);
   const [pin, setPin] = useState("");
   const [isMarking, setIsMarking] = useState(false);
@@ -473,6 +498,7 @@ function CourseCard({ course }: { course: any }) {
                           handleMarkAttendance(code);
                         }}
                         mode="THEORY"
+                        storedFaceDescriptor={currentUser?.faceDescriptor}
                       />
                     </DialogContent>
                   </Dialog>
@@ -499,12 +525,10 @@ function CourseCard({ course }: { course: any }) {
                   <QRScannerFlow 
                     onScanSuccess={async (code) => {
                       setScannedCode(code);
-                      // After QR scan, automatically trigger face verification then submit
-                      // The flow is handled inside QRScannerFlow component or we can manage it here
-                      // For simplicity, we'll let the component handle the transition
                     }}
                     onComplete={(code) => handleMarkAttendance(code)}
                     mode="LAB"
+                    storedFaceDescriptor={currentUser?.faceDescriptor}
                   />
                 </DialogContent>
               </Dialog>

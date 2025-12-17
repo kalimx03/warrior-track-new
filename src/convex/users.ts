@@ -43,3 +43,13 @@ export const updateRole = mutation({
     await ctx.db.patch(userId, { role: args.role });
   },
 });
+
+export const registerFace = mutation({
+  args: { faceDescriptor: v.array(v.number()) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    await ctx.db.patch(userId, { faceDescriptor: args.faceDescriptor });
+  },
+});

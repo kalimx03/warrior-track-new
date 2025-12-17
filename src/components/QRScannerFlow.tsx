@@ -2,23 +2,26 @@ import { useState, useEffect, useRef } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import * as faceapi from "face-api.js";
 import { toast } from "sonner";
-import { ScanLine, Camera, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { ScanLine, Camera, CheckCircle2, Loader2, AlertCircle, ShieldAlert } from "lucide-react";
 
 interface QRScannerFlowProps {
   onScanSuccess: (code: string) => void;
   onComplete?: (code: string) => void;
   mode: "LAB" | "THEORY";
+  storedFaceDescriptor?: number[];
 }
 
 export function QRScannerFlow({ 
   onScanSuccess, 
   onComplete,
-  mode 
+  mode,
+  storedFaceDescriptor
 }: QRScannerFlowProps) {
   const [step, setStep] = useState<"SCAN" | "FACE" | "DONE">("SCAN");
   const [scannedCode, setScannedCode] = useState("");
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [matchScore, setMatchScore] = useState<number | null>(null);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -28,8 +31,11 @@ export function QRScannerFlow({
     const loadModels = async () => {
       try {
         const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        // We can add more models if needed, but tinyFaceDetector is sufficient for presence
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
         setModelsLoaded(true);
       } catch (error) {
         console.error("Error loading face-api models:", error);
@@ -108,27 +114,47 @@ export function QRScannerFlow({
       if (videoRef.current) {
         try {
           const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
-          const detections = await faceapi.detectAllFaces(videoRef.current, options);
+          const detection = await faceapi
+            .detectSingleFace(videoRef.current, options)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
           
-          if (detections.length > 0) {
-            // Face detected with sufficient confidence
-            if (detectionIntervalRef.current) {
-              clearInterval(detectionIntervalRef.current);
+          if (detection) {
+            // If we have a stored descriptor, compare it
+            if (storedFaceDescriptor) {
+              const storedDescriptorFloat32 = new Float32Array(storedFaceDescriptor);
+              const distance = faceapi.euclideanDistance(detection.descriptor, storedDescriptorFloat32);
+              
+              // Distance < 0.6 is generally considered a match
+              setMatchScore(distance);
+              
+              if (distance < 0.5) { // Stricter threshold for security
+                finishVerification();
+              }
+            } else {
+              // Fallback if no descriptor stored (should ideally force registration)
+              // For now, just detect a face
+              finishVerification();
             }
-            setIsDetecting(false);
-            toast.success("Face Verified Successfully!");
-            
-            // Small delay to show success state
-            setTimeout(() => {
-              if (onComplete) onComplete(scannedCode);
-              setStep("DONE");
-            }, 1000);
           }
         } catch (err) {
           console.error("Detection error:", err);
         }
       }
     }, 500); // Check every 500ms
+  };
+
+  const finishVerification = () => {
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+    }
+    setIsDetecting(false);
+    toast.success("Identity Verified Successfully!");
+    
+    setTimeout(() => {
+      if (onComplete) onComplete(scannedCode);
+      setStep("DONE");
+    }, 1000);
   };
 
   return (
@@ -195,7 +221,7 @@ export function QRScannerFlow({
                   {isDetecting ? (
                     <>
                       <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                      SCANNING FACE...
+                      VERIFYING IDENTITY...
                     </>
                   ) : (
                     <>
@@ -204,9 +230,21 @@ export function QRScannerFlow({
                     </>
                   )}
                 </div>
+                {matchScore !== null && (
+                  <div className="mt-2 text-xs text-white/80">
+                    Match Score: {matchScore.toFixed(3)}
+                  </div>
+                )}
               </div>
             </div>
           </div>
+          
+          {!storedFaceDescriptor && (
+            <div className="flex items-center gap-2 p-3 bg-yellow-500/10 text-yellow-600 rounded-lg text-sm">
+              <ShieldAlert className="h-4 w-4 shrink-0" />
+              Warning: No Face ID registered. Using basic detection.
+            </div>
+          )}
         </div>
       )}
 
