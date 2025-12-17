@@ -5,7 +5,7 @@ import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import { createBrowserRouter, RouterProvider } from "react-router";
 import "./index.css";
 import "./types/global.d.ts";
 
@@ -14,6 +14,7 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+import AdminDashboard from "./pages/AdminDashboard";
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -26,7 +27,30 @@ function RouteLoading() {
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
-
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <App />,
+    children: [
+      {
+        path: "/",
+        element: <Landing />,
+      },
+      {
+        path: "/dashboard",
+        element: <Dashboard />,
+      },
+      {
+        path: "/admin-dashboard",
+        element: <AdminDashboard />,
+      },
+      {
+        path: "*",
+        element: <NotFound />,
+      },
+    ],
+  },
+]);
 
 function RouteSyncer() {
   const location = useLocation();
@@ -50,7 +74,6 @@ function RouteSyncer() {
 
   return null;
 }
-
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

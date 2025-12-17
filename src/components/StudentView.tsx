@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar as CalendarIcon, Clock, Flame, Trophy, Bell, ChevronDown, ChevronUp, Camera } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar as CalendarIcon, Clock, Flame, Trophy, Bell, ChevronDown, ChevronUp, Camera, AlertTriangle, QrCode, TrendingUp } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Dialog,
@@ -34,8 +34,11 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 import { useEffect, useRef } from "react";
 import { QRScannerFlow } from "./QRScannerFlow";
 import { FaceRegistration } from "./FaceRegistration";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function StudentView() {
+  const [activeTab, setActiveTab] = useState("active");
+  const courses = useQuery(api.courses.listStudentCourses);
   const enrolledCourses = useQuery(api.courses.listEnrolled);
   const allCourses = useQuery(api.courses.listAll);
   const allAttendance = useQuery(api.attendance.getAllStudentAttendance);
@@ -81,133 +84,151 @@ export default function StudentView() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Warrior Dashboard</h1>
-        <div className="flex items-center gap-2">
-          {!currentUser?.faceDescriptor && (
-            <Dialog open={showFaceRegistration} onOpenChange={setShowFaceRegistration}>
-              <DialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="animate-pulse">
-                  <ShieldCheck className="mr-2 h-4 w-4" />
-                  Register Face ID
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Register Face ID</DialogTitle>
-                  <DialogDescription>
-                    Secure your account with biometric verification for lab access.
-                  </DialogDescription>
-                </DialogHeader>
-                <FaceRegistration onComplete={() => setShowFaceRegistration(false)} />
-              </DialogContent>
-            </Dialog>
-          )}
-          <NotificationsPopover />
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight">Student Dashboard</h1>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
+      {/* Low Attendance Warnings */}
+      <div className="space-y-2">
+        {courses?.map(course => (
+          <AttendanceWarning key={course._id} courseId={course._id} courseName={course.name} />
+        ))}
+      </div>
+
+      <Tabs defaultValue="active" className="w-full" onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="active" className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
             Active Deployments
-          </h2>
-          <div className="grid gap-6 md:grid-cols-2">
-            <AnimatePresence>
-              {enrolledCourses?.map((course, index) => (
-                <motion.div
-                  key={course._id}
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            Attendance Log
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-6">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                Active Deployments
+              </h2>
+              <div className="grid gap-6 md:grid-cols-2">
+                <AnimatePresence>
+                  {enrolledCourses?.map((course, index) => (
+                    <motion.div
+                      key={course._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <CourseCard course={course} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                
+                <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
+                  transition={{ delay: (enrolledCourses?.length || 0) * 0.1 }}
                 >
-                  <CourseCard course={course} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: (enrolledCourses?.length || 0) * 0.1 }}
-            >
-              <Card className="elevation-1 border-dashed border-2 flex flex-col items-center justify-center p-6 min-h-[200px] hover:bg-muted/50 transition-colors h-full">
-                <div className="text-center space-y-4 w-full">
-                  <div className="font-medium">Available Courses</div>
-                  <div className="space-y-2">
-                    {allCourses?.filter(c => !enrolledCourses?.some(e => e._id === c._id)).map(course => (
-                      <div key={course._id} className="flex items-center justify-between gap-4 p-2 bg-background rounded border text-left text-sm">
-                        <div className="overflow-hidden">
-                          <div className="font-bold truncate">{course.code}</div>
-                          <div className="text-muted-foreground truncate text-xs">{course.name}</div>
-                        </div>
-                        <Button size="sm" variant="secondary" onClick={() => handleEnroll(course._id)} disabled={isEnrolling}>
-                          Enroll
-                        </Button>
+                  <Card className="elevation-1 border-dashed border-2 flex flex-col items-center justify-center p-6 min-h-[200px] hover:bg-muted/50 transition-colors h-full">
+                    <div className="text-center space-y-4 w-full">
+                      <div className="font-medium">Available Courses</div>
+                      <div className="space-y-2">
+                        {allCourses?.filter(c => !enrolledCourses?.some(e => e._id === c._id)).map(course => (
+                          <div key={course._id} className="flex items-center justify-between gap-4 p-2 bg-background rounded border text-left text-sm">
+                            <div className="overflow-hidden">
+                              <div className="font-bold truncate">{course.code}</div>
+                              <div className="text-muted-foreground truncate text-xs">{course.name}</div>
+                            </div>
+                            <Button size="sm" variant="secondary" onClick={() => handleEnroll(course._id)} disabled={isEnrolling}>
+                              Enroll
+                            </Button>
+                          </div>
+                        ))}
+                        {(!allCourses || allCourses.length === 0) && (
+                          <div className="text-sm text-muted-foreground">No new courses available</div>
+                        )}
                       </div>
-                    ))}
-                    {(!allCourses || allCourses.length === 0) && (
-                      <div className="text-sm text-muted-foreground">No new courses available</div>
-                    )}
+                    </div>
+                  </Card>
+                </motion.div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-primary" />
+                Attendance Log
+              </h2>
+              <Card className="elevation-2 border-none">
+                <CardContent className="p-4 flex justify-center">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-md border"
+                    components={{
+                      DayButton: (props) => {
+                        const content = getDayContent(props.day.date);
+                        return (
+                          <CalendarDayButton {...props}>
+                            {content || props.children}
+                          </CalendarDayButton>
+                        );
+                      }
+                    }}
+                  />
+                </CardContent>
+                <div className="px-6 pb-4 text-sm text-muted-foreground text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500" />
+                    <span>Present</span>
                   </div>
                 </div>
               </Card>
-            </motion.div>
+            </div>
           </div>
-        </div>
+        </TabsContent>
 
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-primary" />
-            Attendance Log
-          </h2>
-          <Card className="elevation-2 border-none">
-            <CardContent className="p-4 flex justify-center">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                className="rounded-md border"
-                components={{
-                  DayButton: (props) => {
-                    const content = getDayContent(props.day.date);
-                    return (
-                      <CalendarDayButton {...props}>
-                        {content || props.children}
-                      </CalendarDayButton>
-                    );
-                  }
-                }}
-              />
-            </CardContent>
-            <div className="px-6 pb-4 text-sm text-muted-foreground text-center">
-              <div className="flex items-center justify-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                <span>Present</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <History className="h-5 w-5 text-primary" />
-          Detailed Attendance Record
-        </h2>
-        <Card className="elevation-1 border-none">
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {enrolledCourses?.map((course) => (
-                <CourseHistoryRow key={course._id} course={course} />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="history">
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Detailed Attendance Record
+            </h2>
+            <Card className="elevation-1 border-none">
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {enrolledCourses?.map((course) => (
+                    <CourseHistoryRow key={course._id} course={course} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+function AttendanceWarning({ courseId, courseName }: { courseId: Id<"courses">, courseName: string }) {
+  const stats = useQuery(api.attendance.getStats, { courseId });
+  
+  if (!stats || stats.percentage >= 75) return null;
+
+  return (
+    <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle>Low Attendance Warning: {courseName}</AlertTitle>
+      <AlertDescription>
+        Your attendance is currently {stats.percentage.toFixed(1)}%. You must maintain above 75% to avoid penalties.
+      </AlertDescription>
+    </Alert>
   );
 }
 

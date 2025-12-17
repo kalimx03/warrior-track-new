@@ -12,10 +12,11 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { ArrowRight, Loader2, Lock, User, Check, X, ShieldAlert } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
-import { useMutation } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import {
   Dialog,
   DialogContent,
@@ -218,35 +219,47 @@ function ForgotPasswordDialog() {
   );
 }
 
-function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
-  const navigate = useNavigate();
-  const [isSignUp, setIsSignUp] = useState(false);
+export default function Auth() {
+  const { signIn } = useAuthActions();
+  const [step, setStep] = useState<"signIn" | "otp" | "forgotPassword">("signIn");
+  const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [password, setPassword] = useState("");
-
+  const navigate = useNavigate();
+  
+  // Check if user is already authenticated to redirect
+  const user = useQuery(api.users.viewer);
+  
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      const redirect = redirectAfterAuth || "/";
-      navigate(redirect);
+    if (user) {
+      if (user.role === "admin" || user.email === "admin.sayyed03@gmail.com") {
+        navigate("/admin-dashboard");
+      } else {
+        navigate("/dashboard");
+      }
     }
-  }, [authLoading, isAuthenticated, navigate, redirectAfterAuth]);
+  }, [user, navigate]);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSignIn = async (formData: FormData) => {
     setIsLoading(true);
+    const emailInput = formData.get("email") as string;
+    const passwordInput = formData.get("password") as string;
+    
+    // Admin Bypass Check
+    if (emailInput === "admin.sayyed03@gmail.com" && passwordInput === "Admin@123") {
+      // We still need to authenticate with Convex Auth to get a session
+      // Assuming the admin user is created in the system with these credentials
+      // If not, we might need to create it or handle it differently.
+      // For now, we'll proceed with standard sign in, but the useEffect above handles the redirect.
+      setEmail(emailInput);
+    } else {
+      setEmail(emailInput);
+    }
+
     try {
-      const formData = new FormData(event.currentTarget);
-      formData.append("flow", isSignUp ? "signUp" : "signIn");
       await signIn("password", formData);
-      toast.success(isSignUp ? "Account created successfully!" : "Signed in successfully!");
+      // The useEffect will handle the redirect after successful sign in updates the user query
     } catch (error) {
-      console.error("Auth error:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Authentication failed. Please check your credentials."
-      );
+      toast.error("Authentication failed. Please check your credentials.");
       setIsLoading(false);
     }
   };
@@ -363,13 +376,5 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function AuthPage(props: AuthProps) {
-  return (
-    <Suspense>
-      <Auth {...props} />
-    </Suspense>
   );
 }
