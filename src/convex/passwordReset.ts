@@ -35,7 +35,7 @@ export const initiate = mutation({
     });
 
     // Schedule email sending
-    await ctx.scheduler.runAfter(0, api.email.sendPasswordReset, {
+    await ctx.scheduler.runAfter(0, internal.email.sendPasswordReset, {
       email: args.email,
       code,
     });

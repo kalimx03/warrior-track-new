@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit } from "lucide-react";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -221,6 +221,86 @@ function CreateCourseDialog() {
   );
 }
 
+function AttendanceManager({ sessionId }: { sessionId: Id<"sessions"> }) {
+  const students = useQuery(api.attendance.getSessionAttendanceList, { sessionId });
+  const updateStatus = useMutation(api.attendance.manualUpdate);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleToggle = async (studentId: Id<"users">, currentStatus: string) => {
+    const newStatus = currentStatus === "PRESENT" ? "ABSENT" : "PRESENT";
+    try {
+      await updateStatus({ sessionId, studentId, status: newStatus });
+      toast.success(`Marked ${newStatus}`);
+    } catch (error) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <UserCheck className="h-4 w-4" />
+          Manage Attendance
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Attendance Register</DialogTitle>
+          <DialogDescription>Manually update student attendance status.</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto py-4">
+          {!students ? (
+            <div className="text-center p-4">Loading...</div>
+          ) : students.length === 0 ? (
+            <div className="text-center p-4 text-muted-foreground">No students enrolled.</div>
+          ) : (
+            <div className="space-y-2">
+              {students.map((student) => (
+                <div key={student.studentId} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-2 w-2 rounded-full ${student.status === 'PRESENT' ? 'bg-green-500' : 'bg-destructive'}`} />
+                    <div>
+                      <div className="font-medium">{student.name}</div>
+                      <div className="text-xs text-muted-foreground">{student.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant={student.status === 'PRESENT' ? "default" : "outline"}
+                      className={student.status === 'PRESENT' ? "bg-green-600 hover:bg-green-700" : ""}
+                      onClick={() => handleToggle(student.studentId, student.status)}
+                    >
+                      {student.status === 'PRESENT' ? (
+                        <>
+                          <Check className="h-3 w-3 mr-1" /> Present
+                        </>
+                      ) : (
+                        "Mark Present"
+                      )}
+                    </Button>
+                    {student.status === 'PRESENT' && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleToggle(student.studentId, student.status)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
   const activeSession = useQuery(api.sessions.getActive, { courseId });
   const recentSessions = useQuery(api.sessions.getRecent, { courseId });
@@ -283,11 +363,20 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                 </div>
                 
                 {activeSession.type === "THEORY" && activeSession.code && (
-                  <div className="mt-6 mb-4">
-                    <div className="text-6xl font-mono font-bold tracking-[0.2em] text-primary">
+                  <div className="mt-6 mb-4 flex flex-col items-center">
+                    <div className="text-6xl font-mono font-bold tracking-[0.2em] text-primary mb-6">
                       {activeSession.code}
                     </div>
-                    <div className="text-sm text-muted-foreground mt-4 flex items-center justify-center gap-2">
+                    
+                    <div className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.code}`}
+                        alt="Session QR Code"
+                        className="w-40 h-40"
+                      />
+                    </div>
+
+                    <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
                       <Clock className="h-4 w-4" />
                       PIN expires in 5 minutes
                     </div>
@@ -309,15 +398,19 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                   </div>
                 )}
               </div>
-              <Button 
-                variant="destructive" 
-                className="w-full h-12 text-lg" 
-                onClick={handleEndSession}
-                disabled={isLoading}
-              >
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
-                End Operation
-              </Button>
+              
+              <div className="flex gap-2">
+                <AttendanceManager sessionId={activeSession._id} />
+                <Button 
+                  variant="destructive" 
+                  className="flex-1" 
+                  onClick={handleEndSession}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  End Operation
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
@@ -346,7 +439,7 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                 </div>
                 <div className="text-center">
                   <div className="font-bold">Start Theory</div>
-                  <span className="text-xs text-muted-foreground">PIN Code Mode</span>
+                  <span className="text-xs text-muted-foreground">PIN + QR Mode</span>
                 </div>
               </Button>
             </div>
@@ -382,9 +475,12 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold">{session.attendanceCount}</div>
-                    <div className="text-xs text-muted-foreground">Present</div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-sm font-bold">{session.attendanceCount}</div>
+                      <div className="text-xs text-muted-foreground">Present</div>
+                    </div>
+                    <AttendanceManager sessionId={session._id} />
                   </div>
                 </div>
               ))}

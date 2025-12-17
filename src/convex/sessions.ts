@@ -129,7 +129,7 @@ export const getRecent = query({
           .query("attendance")
           .withIndex("by_session", (q) => q.eq("sessionId", session._id))
           .collect()
-          .then((results) => results.length);
+          .then((results) => results.filter(r => r.status === "PRESENT").length);
         
         return {
           ...session,
@@ -181,7 +181,7 @@ export const search = query({
           .query("attendance")
           .withIndex("by_session", (q) => q.eq("sessionId", session._id))
           .collect()
-          .then((results) => results.length);
+          .then((results) => results.filter(r => r.status === "PRESENT").length);
         
         return {
           ...session,

@@ -43,7 +43,12 @@ export const mark = mutation({
       )
       .first();
 
-    if (existing) return existing._id;
+    if (existing) {
+      if (existing.status !== "PRESENT") {
+        await ctx.db.patch(existing._id, { status: "PRESENT", timestamp: Date.now() });
+      }
+      return existing._id;
+    }
 
     return await ctx.db.insert("attendance", {
       sessionId: args.sessionId,
@@ -74,7 +79,12 @@ export const getStats = query({
       .withIndex("by_student", (q) => q.eq("studentId", userId))
       .collect();
 
-    const attendanceSet = new Set(attendances.map(a => a.sessionId));
+    // Only count PRESENT records
+    const attendanceSet = new Set(
+      attendances
+        .filter(a => a.status === "PRESENT")
+        .map(a => a.sessionId)
+    );
 
     let presentCount = 0;
     let currentStreak = 0;
@@ -142,7 +152,7 @@ export const getStudentHistory = query({
           _id: session._id,
           startTime: session.startTime,
           type: session.type,
-          status: attendance ? "PRESENT" : "ABSENT",
+          status: attendance ? attendance.status : "ABSENT",
         };
       })
     );
@@ -186,7 +196,7 @@ export const getCourseReport = query({
             q.eq("sessionId", session._id).eq("studentId", student._id)
           )
           .first();
-        if (att) attended++;
+        if (att && att.status === "PRESENT") attended++;
       }
       report.push({
         student,
@@ -234,15 +244,13 @@ export const getTrends = query({
     const totalStudents = enrollments.length;
 
     // Calculate attendance for each session
-    // Note: In a production app with large data, this aggregation should be optimized 
-    // or pre-calculated. For MVP, we'll do it here.
     const trends = await Promise.all(
       filteredSessions.map(async (session) => {
         const attendanceCount = await ctx.db
           .query("attendance")
           .withIndex("by_session", (q) => q.eq("sessionId", session._id))
           .collect()
-          .then((results) => results.length);
+          .then((results) => results.filter(r => r.status === "PRESENT").length);
 
         return {
           date: new Date(session.startTime).toLocaleDateString(),
@@ -255,8 +263,6 @@ export const getTrends = query({
       })
     );
 
-    // Group by date if multiple sessions per day, or just return session points
-    // For this view, returning session points gives better granularity for "real-time" feel
     return trends;
   },
 });
@@ -274,7 +280,7 @@ export const getAllStudentAttendance = query({
 
     // Enrich with course info for the calendar
     const enriched = await Promise.all(
-      attendance.map(async (a) => {
+      attendance.filter(a => a.status === "PRESENT").map(async (a) => {
         const session = await ctx.db.get(a.sessionId);
         if (!session) return null;
         const course = await ctx.db.get(session.courseId);
@@ -288,5 +294,95 @@ export const getAllStudentAttendance = query({
     );
 
     return enriched.filter((a) => a !== null);
+  },
+});
+
+export const getSessionAttendanceList = query({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return [];
+
+    // Verify faculty ownership
+    const course = await ctx.db.get(session.courseId);
+    if (!course || course.facultyId !== userId) return [];
+
+    // Get all enrolled students
+    const enrollments = await ctx.db
+      .query("enrollments")
+      .withIndex("by_course", (q) => q.eq("courseId", session.courseId))
+      .collect();
+
+    // Get attendance records for this session
+    const attendance = await ctx.db
+      .query("attendance")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    const attendanceMap = new Map(attendance.map(a => [a.studentId, a]));
+
+    const students = await Promise.all(
+      enrollments.map(async (e) => {
+        const student = await ctx.db.get(e.studentId);
+        if (!student) return null;
+        const record = attendanceMap.get(student._id);
+        return {
+          studentId: student._id,
+          name: student.name || student.email || "Unknown",
+          email: student.email,
+          status: record ? record.status : "ABSENT",
+          attendanceId: record?._id,
+          timestamp: record?.timestamp
+        };
+      })
+    );
+
+    return students.filter(s => s !== null);
+  },
+});
+
+export const manualUpdate = mutation({
+  args: {
+    sessionId: v.id("sessions"),
+    studentId: v.id("users"),
+    status: v.union(v.literal("PRESENT"), v.literal("ABSENT")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    const course = await ctx.db.get(session.courseId);
+    if (!course || course.facultyId !== userId) throw new Error("Unauthorized");
+
+    const existing = await ctx.db
+      .query("attendance")
+      .withIndex("by_session_and_student", (q) =>
+        q.eq("sessionId", args.sessionId).eq("studentId", args.studentId)
+      )
+      .first();
+
+    if (args.status === "PRESENT") {
+      if (!existing) {
+        await ctx.db.insert("attendance", {
+          sessionId: args.sessionId,
+          studentId: args.studentId,
+          timestamp: Date.now(),
+          status: "PRESENT",
+        });
+      } else if (existing.status !== "PRESENT") {
+        await ctx.db.patch(existing._id, { status: "PRESENT" });
+      }
+    } else {
+      // Mark ABSENT
+      if (existing) {
+        await ctx.db.patch(existing._id, { status: "ABSENT" });
+      }
+    }
   },
 });
