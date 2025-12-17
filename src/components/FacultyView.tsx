@@ -8,16 +8,19 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar } from "lucide-react";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { startOfWeek, startOfMonth, format, isSameWeek, isSameMonth, parseISO } from "date-fns";
 import { FacultySessionHistory } from "./FacultySessionHistory";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 
 export default function FacultyView() {
   const courses = useQuery(api.courses.listByFaculty);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
+  const selectedCourse = courses?.find(c => c._id === selectedCourseId);
 
   return (
     <div className="space-y-6">
@@ -58,6 +61,9 @@ export default function FacultyView() {
                 ))}
               </SelectContent>
             </Select>
+            {selectedCourse && (
+              <EditCourseDialog course={selectedCourse} />
+            )}
           </div>
 
           {selectedCourseId && (
@@ -87,6 +93,68 @@ export default function FacultyView() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function EditCourseDialog({ course }: { course: any }) {
+  const updateCourse = useMutation(api.courses.update);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    const formData = new FormData(e.currentTarget);
+    try {
+      await updateCourse({
+        courseId: course._id,
+        name: formData.get("name") as string,
+        code: formData.get("code") as string,
+        description: formData.get("description") as string,
+      });
+      toast.success("Course updated successfully");
+      setIsOpen(false);
+    } catch (error) {
+      toast.error("Failed to update course");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="icon">
+          <Settings className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Course Protocols</DialogTitle>
+          <DialogDescription>Update course details and mission parameters.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-name">Course Name</Label>
+            <Input id="edit-name" name="name" required defaultValue={course.name} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-code">Course Code</Label>
+            <Input id="edit-code" name="code" required defaultValue={course.code} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-description">Description</Label>
+            <Input id="edit-description" name="description" defaultValue={course.description} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -188,7 +256,10 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <Card className="elevation-2 border-none bg-primary/5">
+      <Card className="elevation-2 border-none bg-primary/5 overflow-hidden relative">
+        {activeSession && (
+          <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-transparent via-primary to-transparent animate-pulse" />
+        )}
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5" />
@@ -198,64 +269,85 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
         </CardHeader>
         <CardContent className="space-y-4">
           {activeSession ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-background rounded-lg border text-center">
-                <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Active Session</div>
-                <div className="text-2xl font-bold text-primary">{activeSession.type}</div>
+            <div className="space-y-6">
+              <div className="p-6 bg-background rounded-xl border shadow-xs text-center relative overflow-hidden">
+                <div className="absolute top-2 right-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                  </span>
+                </div>
+                
+                <div className="text-sm text-muted-foreground uppercase tracking-wider mb-2 font-semibold">
+                  Active {activeSession.type} Session
+                </div>
                 
                 {activeSession.type === "THEORY" && activeSession.code && (
-                  <div className="mt-4">
-                    <div className="text-sm text-muted-foreground mb-1">Access PIN</div>
-                    <div className="text-4xl font-mono font-bold tracking-widest">{activeSession.code}</div>
-                    <div className="text-xs text-muted-foreground mt-2">Valid for 5 minutes</div>
+                  <div className="mt-6 mb-4">
+                    <div className="text-6xl font-mono font-bold tracking-[0.2em] text-primary">
+                      {activeSession.code}
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-4 flex items-center justify-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      PIN expires in 5 minutes
+                    </div>
                   </div>
                 )}
 
                 {activeSession.type === "LAB" && activeSession.code && (
                   <div className="mt-4 flex flex-col items-center">
-                    <div className="text-sm text-muted-foreground mb-2">Scan to Mark Attendance</div>
-                    <div className="bg-white p-2 rounded-lg shadow-sm">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border">
                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${activeSession.code}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.code}`}
                         alt="Session QR Code"
-                        className="w-32 h-32"
+                        className="w-48 h-48"
                       />
                     </div>
-                    <div className="text-xs text-muted-foreground mt-2">Warriors must scan this code</div>
+                    <div className="text-sm text-muted-foreground mt-4 font-medium">
+                      Scan to verify presence
+                    </div>
                   </div>
                 )}
               </div>
               <Button 
                 variant="destructive" 
-                className="w-full" 
+                className="w-full h-12 text-lg" 
                 onClick={handleEndSession}
                 disabled={isLoading}
               >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                End Session
+                {isLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+                End Operation
               </Button>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
               <Button 
-                className="h-24 flex flex-col gap-2" 
+                className="h-32 flex flex-col gap-3 hover:bg-primary/10 hover:border-primary/50 transition-all" 
                 variant="outline"
                 onClick={() => handleStartSession("LAB")}
                 disabled={isLoading}
               >
-                <QrCode className="h-6 w-6" />
-                Start Lab
-                <span className="text-xs font-normal text-muted-foreground">QR Code Mode</span>
+                <div className="p-3 rounded-full bg-blue-100 text-blue-600">
+                  <QrCode className="h-6 w-6" />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold">Start Lab</div>
+                  <span className="text-xs text-muted-foreground">QR Code Mode</span>
+                </div>
               </Button>
               <Button 
-                className="h-24 flex flex-col gap-2" 
+                className="h-32 flex flex-col gap-3 hover:bg-primary/10 hover:border-primary/50 transition-all" 
                 variant="outline"
                 onClick={() => handleStartSession("THEORY")}
                 disabled={isLoading}
               >
-                <Users className="h-6 w-6" />
-                Start Theory
-                <span className="text-xs font-normal text-muted-foreground">PIN Code Mode</span>
+                <div className="p-3 rounded-full bg-purple-100 text-purple-600">
+                  <Users className="h-6 w-6" />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold">Start Theory</div>
+                  <span className="text-xs text-muted-foreground">PIN Code Mode</span>
+                </div>
               </Button>
             </div>
           )}

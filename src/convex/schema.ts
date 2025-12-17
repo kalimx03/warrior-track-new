@@ -69,6 +69,15 @@ const schema = defineSchema(
     }).index("by_session", ["sessionId"])
       .index("by_student", ["studentId"])
       .index("by_session_and_student", ["sessionId", "studentId"]),
+
+    notifications: defineTable({
+      userId: v.id("users"),
+      title: v.string(),
+      message: v.string(),
+      isRead: v.boolean(),
+      type: v.union(v.literal("SESSION_START"), v.literal("ALERT"), v.literal("INFO")),
+      relatedId: v.optional(v.string()),
+    }).index("by_user", ["userId"]),
   },
   {
     schemaValidation: false,

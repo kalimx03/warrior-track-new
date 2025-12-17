@@ -82,3 +82,25 @@ export const enroll = mutation({
     });
   },
 });
+
+export const update = mutation({
+  args: {
+    courseId: v.id("courses"),
+    name: v.string(),
+    code: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    
+    const course = await ctx.db.get(args.courseId);
+    if (!course || course.facultyId !== userId) throw new Error("Unauthorized");
+
+    await ctx.db.patch(args.courseId, {
+      name: args.name,
+      code: args.code,
+      description: args.description,
+    });
+  },
+});

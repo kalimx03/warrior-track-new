@@ -44,6 +44,25 @@ export const create = mutation({
       createdBy: userId,
     });
 
+    // Notify enrolled students
+    const enrollments = await ctx.db
+      .query("enrollments")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .collect();
+
+    const course = await ctx.db.get(args.courseId);
+
+    for (const enrollment of enrollments) {
+      await ctx.db.insert("notifications", {
+        userId: enrollment.studentId,
+        title: "Session Active",
+        message: `${args.type} session started for ${course?.code || "your course"}.`,
+        isRead: false,
+        type: "SESSION_START",
+        relatedId: sessionId,
+      });
+    }
+
     return sessionId;
   },
 });
