@@ -1,7 +1,9 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useEffect } from "react";
+import FacultyView from "@/components/FacultyView";
+import StudentView from "@/components/StudentView";
 
 export default function Dashboard() {
   const user = useQuery(api.users.viewer);

@@ -219,10 +219,12 @@ function ForgotPasswordDialog() {
   );
 }
 
-export default function Auth() {
+export default function Auth({ redirectAfterAuth }: AuthProps) {
   const { signIn } = useAuthActions();
   const [step, setStep] = useState<"signIn" | "otp" | "forgotPassword">("signIn");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   
@@ -234,10 +236,10 @@ export default function Auth() {
       if (user.role === "admin" || user.email === "admin.sayyed03@gmail.com") {
         navigate("/admin-dashboard");
       } else {
-        navigate("/dashboard");
+        navigate(redirectAfterAuth || "/dashboard");
       }
     }
-  }, [user, navigate]);
+  }, [user, navigate, redirectAfterAuth]);
 
   const handleSignIn = async (formData: FormData) => {
     setIsLoading(true);
@@ -246,10 +248,6 @@ export default function Auth() {
     
     // Admin Bypass Check
     if (emailInput === "admin.sayyed03@gmail.com" && passwordInput === "Admin@123") {
-      // We still need to authenticate with Convex Auth to get a session
-      // Assuming the admin user is created in the system with these credentials
-      // If not, we might need to create it or handle it differently.
-      // For now, we'll proceed with standard sign in, but the useEffect above handles the redirect.
       setEmail(emailInput);
     } else {
       setEmail(emailInput);
@@ -257,11 +255,16 @@ export default function Auth() {
 
     try {
       await signIn("password", formData);
-      // The useEffect will handle the redirect after successful sign in updates the user query
     } catch (error) {
       toast.error("Authentication failed. Please check your credentials.");
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    await handleSignIn(formData);
   };
 
   return (
