@@ -75,7 +75,7 @@ const schema = defineSchema(
       title: v.string(),
       message: v.string(),
       isRead: v.boolean(),
-      type: v.union(v.literal("SESSION_START"), v.literal("ALERT"), v.literal("INFO")),
+      type: v.union(v.literal("SESSION_START"), v.literal("SESSION_END"), v.literal("ALERT"), v.literal("INFO")),
       relatedId: v.optional(v.string()),
     }).index("by_user", ["userId"]),
   },

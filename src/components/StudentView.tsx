@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar, Clock, Flame, Trophy, Bell } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar as CalendarIcon, Clock, Flame, Trophy, Bell, ChevronDown, ChevronUp } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Dialog,
@@ -22,12 +22,22 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
+import { motion, AnimatePresence } from "framer-motion";
+import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 export default function StudentView() {
   const enrolledCourses = useQuery(api.courses.listEnrolled);
   const allCourses = useQuery(api.courses.listAll);
+  const allAttendance = useQuery(api.attendance.getAllStudentAttendance);
   const enroll = useMutation(api.courses.enroll);
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [date, setDate] = useState<Date | undefined>(new Date());
 
   const handleEnroll = async (courseId: Id<"courses">) => {
     setIsEnrolling(true);
@@ -41,41 +51,211 @@ export default function StudentView() {
     }
   };
 
+  // Process attendance for calendar
+  const attendanceDates = allAttendance?.map(a => new Date(a.timestamp)) || [];
+  
+  const getDayContent = (day: Date) => {
+    const dayAttendance = allAttendance?.filter(a => 
+      new Date(a.timestamp).toDateString() === day.toDateString()
+    );
+    
+    if (dayAttendance && dayAttendance.length > 0) {
+      return (
+        <div className="relative flex items-center justify-center w-full h-full">
+          {day.getDate()}
+          <div className="absolute bottom-1 flex gap-0.5">
+            {dayAttendance.map((_, i) => (
+              <div key={i} className="h-1 w-1 rounded-full bg-green-500" />
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold tracking-tight">Warrior Dashboard</h1>
         <NotificationsPopover />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {enrolledCourses?.map((course) => (
-          <CourseCard key={course._id} course={course} />
-        ))}
-        
-        <Card className="elevation-1 border-dashed border-2 flex flex-col items-center justify-center p-6 min-h-[200px] hover:bg-muted/50 transition-colors">
-          <div className="text-center space-y-4">
-            <div className="font-medium">Available Courses</div>
-            <div className="space-y-2">
-              {allCourses?.filter(c => !enrolledCourses?.some(e => e._id === c._id)).map(course => (
-                <div key={course._id} className="flex items-center justify-between gap-4 p-2 bg-background rounded border text-left text-sm">
-                  <div>
-                    <div className="font-bold">{course.code}</div>
-                    <div className="text-muted-foreground truncate max-w-[150px]">{course.name}</div>
-                  </div>
-                  <Button size="sm" variant="secondary" onClick={() => handleEnroll(course._id)} disabled={isEnrolling}>
-                    Enroll
-                  </Button>
-                </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            Active Deployments
+          </h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            <AnimatePresence>
+              {enrolledCourses?.map((course, index) => (
+                <motion.div
+                  key={course._id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <CourseCard course={course} />
+                </motion.div>
               ))}
-              {(!allCourses || allCourses.length === 0) && (
-                <div className="text-sm text-muted-foreground">No new courses available</div>
-              )}
-            </div>
+            </AnimatePresence>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (enrolledCourses?.length || 0) * 0.1 }}
+            >
+              <Card className="elevation-1 border-dashed border-2 flex flex-col items-center justify-center p-6 min-h-[200px] hover:bg-muted/50 transition-colors h-full">
+                <div className="text-center space-y-4 w-full">
+                  <div className="font-medium">Available Courses</div>
+                  <div className="space-y-2">
+                    {allCourses?.filter(c => !enrolledCourses?.some(e => e._id === c._id)).map(course => (
+                      <div key={course._id} className="flex items-center justify-between gap-4 p-2 bg-background rounded border text-left text-sm">
+                        <div className="overflow-hidden">
+                          <div className="font-bold truncate">{course.code}</div>
+                          <div className="text-muted-foreground truncate text-xs">{course.name}</div>
+                        </div>
+                        <Button size="sm" variant="secondary" onClick={() => handleEnroll(course._id)} disabled={isEnrolling}>
+                          Enroll
+                        </Button>
+                      </div>
+                    ))}
+                    {(!allCourses || allCourses.length === 0) && (
+                      <div className="text-sm text-muted-foreground">No new courses available</div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
           </div>
+        </div>
+
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 text-primary" />
+            Attendance Log
+          </h2>
+          <Card className="elevation-2 border-none">
+            <CardContent className="p-4 flex justify-center">
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={setDate}
+                className="rounded-md border"
+                components={{
+                  DayButton: (props) => {
+                    const content = getDayContent(props.day.date);
+                    return (
+                      <CalendarDayButton {...props}>
+                        {content || props.children}
+                      </CalendarDayButton>
+                    );
+                  }
+                }}
+              />
+            </CardContent>
+            <div className="px-6 pb-4 text-sm text-muted-foreground text-center">
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-500" />
+                <span>Present</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <History className="h-5 w-5 text-primary" />
+          Detailed Attendance Record
+        </h2>
+        <Card className="elevation-1 border-none">
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {enrolledCourses?.map((course) => (
+                <CourseHistoryRow key={course._id} course={course} />
+              ))}
+            </div>
+          </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+function CourseHistoryRow({ course }: { course: any }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const history = useQuery(api.attendance.getStudentHistory, { courseId: course._id });
+  const stats = useQuery(api.attendance.getStats, { courseId: course._id });
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+        <div className="flex items-center gap-4 flex-1">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-9 p-0">
+              {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              <span className="sr-only">Toggle</span>
+            </Button>
+          </CollapsibleTrigger>
+          <div>
+            <div className="font-semibold">{course.code}</div>
+            <div className="text-sm text-muted-foreground">{course.name}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-6 mr-4">
+          <div className="text-right hidden sm:block">
+            <div className="text-sm font-medium">Attendance</div>
+            <div className={`text-lg font-bold ${(stats?.percentage || 0) < 75 ? 'text-destructive' : 'text-green-600'}`}>
+              {(stats?.percentage || 0).toFixed(0)}%
+            </div>
+          </div>
+          <div className="text-right hidden sm:block">
+            <div className="text-sm font-medium">Streak</div>
+            <div className="text-lg font-bold text-orange-500 flex items-center justify-end gap-1">
+              <Flame className="h-4 w-4" />
+              {stats?.currentStreak || 0}
+            </div>
+          </div>
+        </div>
+      </div>
+      <CollapsibleContent>
+        <div className="px-4 pb-4 pt-0 pl-16">
+          <div className="rounded-md border bg-muted/20">
+            {!history ? (
+              <div className="p-4 text-center text-sm">Loading history...</div>
+            ) : history.length === 0 ? (
+              <div className="p-4 text-center text-sm text-muted-foreground">No sessions recorded yet.</div>
+            ) : (
+              <div className="divide-y">
+                {history.map((session) => (
+                  <div key={session._id} className="flex items-center justify-between p-3 text-sm">
+                    <div className="flex items-center gap-3">
+                      <Badge variant={session.type === 'LAB' ? 'secondary' : 'outline'} className="w-16 justify-center">
+                        {session.type}
+                      </Badge>
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {new Date(session.startTime).toLocaleDateString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`font-bold flex items-center gap-2 ${session.status === 'PRESENT' ? 'text-green-600' : 'text-destructive'}`}>
+                      {session.status === 'PRESENT' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                      {session.status}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -122,14 +302,19 @@ function NotificationsPopover() {
               {notifications.map((notification) => (
                 <div 
                   key={notification._id} 
-                  className={`p-4 hover:bg-muted/50 transition-colors ${!notification.isRead ? 'bg-primary/5' : ''}`}
+                  className={`p-4 hover:bg-muted/50 transition-colors cursor-pointer ${!notification.isRead ? 'bg-primary/5' : ''}`}
                   onClick={() => !notification.isRead && markAsRead({ notificationId: notification._id })}
                 >
                   <div className="flex justify-between items-start gap-2">
                     <div className="space-y-1">
-                      <p className={`text-sm ${!notification.isRead ? 'font-semibold' : 'font-medium'}`}>
-                        {notification.title}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        {notification.type === 'SESSION_START' && <Clock className="h-3 w-3 text-blue-500" />}
+                        {notification.type === 'SESSION_END' && <CheckCircle2 className="h-3 w-3 text-green-500" />}
+                        {notification.type === 'ALERT' && <AlertCircle className="h-3 w-3 text-destructive" />}
+                        <p className={`text-sm ${!notification.isRead ? 'font-semibold' : 'font-medium'}`}>
+                          {notification.title}
+                        </p>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {notification.message}
                       </p>
@@ -151,13 +336,11 @@ function NotificationsPopover() {
 function CourseCard({ course }: { course: any }) {
   const stats = useQuery(api.attendance.getStats, { courseId: course._id });
   const activeSession = useQuery(api.sessions.getActive, { courseId: course._id });
-  const history = useQuery(api.attendance.getStudentHistory, { courseId: course._id });
   const markAttendance = useMutation(api.attendance.mark);
   const [pin, setPin] = useState("");
   const [qrCode, setQrCode] = useState("");
   const [isMarking, setIsMarking] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
 
   const handleMarkAttendance = async (codeToUse?: string) => {
     if (!activeSession) return;
@@ -184,7 +367,7 @@ function CourseCard({ course }: { course: any }) {
   const longestStreak = stats?.longestStreak || 0;
 
   return (
-    <Card className="elevation-2 border-none overflow-hidden flex flex-col">
+    <Card className="elevation-2 border-none overflow-hidden flex flex-col h-full hover:shadow-lg transition-all duration-300">
       <div className={`h-2 w-full ${isAtRisk ? 'bg-destructive' : 'bg-green-500'}`} />
       <CardHeader>
         <div className="flex justify-between items-start">
@@ -228,8 +411,12 @@ function CourseCard({ course }: { course: any }) {
         </div>
 
         {activeSession ? (
-          <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3 animate-pulse">
-            <div className="flex items-center gap-2 text-primary font-medium">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3"
+          >
+            <div className="flex items-center gap-2 text-primary font-medium animate-pulse">
               <ShieldCheck className="h-5 w-5" />
               Active {activeSession.type} Session
             </div>
@@ -288,56 +475,12 @@ function CourseCard({ course }: { course: any }) {
                 </DialogContent>
               </Dialog>
             )}
-          </div>
+          </motion.div>
         ) : (
           <div className="p-4 bg-muted/30 rounded-lg border border-dashed text-center text-muted-foreground text-sm">
             No active session deployed
           </div>
         )}
-
-        <Dialog open={showHistory} onOpenChange={setShowHistory}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" className="w-full text-muted-foreground hover:text-primary">
-              <History className="mr-2 h-4 w-4" />
-              View Attendance History
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Attendance History</DialogTitle>
-              <DialogDescription>{course.name} ({course.code})</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 mt-4">
-              {!history ? (
-                <div className="text-center py-4">Loading history...</div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-4 text-muted-foreground">No sessions recorded yet.</div>
-              ) : (
-                history.map((session) => (
-                  <div key={session._id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${session.status === 'PRESENT' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        {session.status === 'PRESENT' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                      </div>
-                      <div>
-                        <div className="font-medium text-sm">{session.type} Session</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(session.startTime).toLocaleDateString()}
-                          <Clock className="h-3 w-3 ml-1" />
-                          {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                    </div>
-                    <div className={`text-sm font-bold ${session.status === 'PRESENT' ? 'text-green-600' : 'text-destructive'}`}>
-                      {session.status}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
       </CardContent>
     </Card>
   );

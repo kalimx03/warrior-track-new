@@ -260,3 +260,33 @@ export const getTrends = query({
     return trends;
   },
 });
+
+export const getAllStudentAttendance = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const attendance = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", userId))
+      .collect();
+
+    // Enrich with course info for the calendar
+    const enriched = await Promise.all(
+      attendance.map(async (a) => {
+        const session = await ctx.db.get(a.sessionId);
+        if (!session) return null;
+        const course = await ctx.db.get(session.courseId);
+        return {
+          ...a,
+          sessionType: session.type,
+          courseCode: course?.code,
+          courseName: course?.name,
+        };
+      })
+    );
+
+    return enriched.filter((a) => a !== null);
+  },
+});

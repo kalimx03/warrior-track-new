@@ -73,10 +73,32 @@ export const end = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
     await ctx.db.patch(args.sessionId, {
       isActive: false,
       endTime: Date.now(),
     });
+
+    // Notify enrolled students
+    const enrollments = await ctx.db
+      .query("enrollments")
+      .withIndex("by_course", (q) => q.eq("courseId", session.courseId))
+      .collect();
+
+    const course = await ctx.db.get(session.courseId);
+
+    for (const enrollment of enrollments) {
+      await ctx.db.insert("notifications", {
+        userId: enrollment.studentId,
+        title: "Session Ended",
+        message: `The ${session.type} session for ${course?.code || "your course"} has concluded.`,
+        isRead: false,
+        type: "SESSION_END",
+        relatedId: session._id,
+      });
+    }
   },
 });
 
