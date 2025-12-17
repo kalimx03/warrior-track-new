@@ -136,3 +136,53 @@ export const getCourseReport = query({
     return report;
   },
 });
+
+export const getTrends = query({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    // Get all sessions for the course, ordered by time
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .order("asc")
+      .collect();
+
+    if (sessions.length === 0) return [];
+
+    // Get total enrolled students for capacity calculation
+    const enrollments = await ctx.db
+      .query("enrollments")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .collect();
+    const totalStudents = enrollments.length;
+
+    // Calculate attendance for each session
+    // Note: In a production app with large data, this aggregation should be optimized 
+    // or pre-calculated. For MVP, we'll do it here.
+    const trends = await Promise.all(
+      sessions.map(async (session) => {
+        const attendanceCount = await ctx.db
+          .query("attendance")
+          .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+          .collect()
+          .then((results) => results.length);
+
+        return {
+          date: new Date(session.startTime).toLocaleDateString(),
+          timestamp: session.startTime,
+          attendance: attendanceCount,
+          absent: totalStudents - attendanceCount,
+          total: totalStudents,
+          type: session.type,
+        };
+      })
+    );
+
+    // Group by date if multiple sessions per day, or just return session points
+    // For this view, returning session points gives better granularity for "real-time" feel
+    return trends;
+  },
+});

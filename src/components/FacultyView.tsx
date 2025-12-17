@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 export default function FacultyView() {
   const courses = useQuery(api.courses.listByFaculty);
@@ -61,7 +63,10 @@ export default function FacultyView() {
         </TabsContent>
         <TabsContent value="reports" className="mt-4">
           {selectedCourseId ? (
-            <CourseReport courseId={selectedCourseId as Id<"courses">} />
+            <div className="space-y-6">
+              <AttendanceTrends courseId={selectedCourseId as Id<"courses">} />
+              <CourseReport courseId={selectedCourseId as Id<"courses">} />
+            </div>
           ) : (
             <div className="text-center p-8 text-muted-foreground">
               Select a course to view reports
@@ -284,6 +289,71 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
+  const trends = useQuery(api.attendance.getTrends, { courseId });
+
+  if (!trends || trends.length === 0) return null;
+
+  const chartConfig = {
+    attendance: {
+      label: "Present",
+      color: "hsl(var(--primary))",
+    },
+    absent: {
+      label: "Absent",
+      color: "hsl(var(--destructive))",
+    },
+  };
+
+  return (
+    <Card className="elevation-1 border-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5" />
+          Attendance Trends
+        </CardTitle>
+        <CardDescription>Real-time session attendance tracking</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[300px] w-full">
+          <ChartContainer config={chartConfig} className="h-full w-full">
+            <AreaChart data={trends} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="fillAttendance" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.1} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                tickLine={false} 
+                axisLine={false} 
+                tickMargin={8} 
+                minTickGap={32}
+              />
+              <YAxis 
+                tickLine={false} 
+                axisLine={false} 
+                tickMargin={8} 
+              />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Area
+                type="monotone"
+                dataKey="attendance"
+                stroke="var(--color-primary)"
+                fillOpacity={1}
+                fill="url(#fillAttendance)"
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ChartContainer>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
