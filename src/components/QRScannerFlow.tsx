@@ -48,6 +48,9 @@ export function QRScannerFlow({
 
   useEffect(() => {
     if (step === "SCAN") {
+      // Ensure the element exists before initializing
+      if (!document.getElementById("reader")) return;
+
       // Initialize scanner
       const scanner = new Html5QrcodeScanner(
         "reader",
@@ -55,8 +58,20 @@ export function QRScannerFlow({
         /* verbose= */ false
       );
       
-      scanner.render((decodedText: string) => {
-        scanner.clear();
+      scannerRef.current = scanner;
+      let isCleared = false;
+
+      const handleScanSuccess = async (decodedText: string) => {
+        if (isCleared) return;
+        isCleared = true;
+
+        try {
+          // Clear the scanner before updating state to prevent UI updates on unmounted component
+          await scanner.clear();
+        } catch (error) {
+          console.error("Failed to clear scanner:", error);
+        }
+
         setScannedCode(decodedText);
         onScanSuccess(decodedText);
         
@@ -65,14 +80,19 @@ export function QRScannerFlow({
         } else {
           setStep("DONE");
         }
-      }, (error: any) => {
+      };
+
+      scanner.render(handleScanSuccess, (error: any) => {
         // handle scan error if needed
       });
       
-      scannerRef.current = scanner;
-
       return () => {
-        scanner.clear().catch(console.error);
+        if (!isCleared) {
+          isCleared = true;
+          scanner.clear().catch((error) => {
+            console.warn("Scanner cleanup error:", error);
+          });
+        }
       };
     }
   }, [step, mode, onScanSuccess]);
