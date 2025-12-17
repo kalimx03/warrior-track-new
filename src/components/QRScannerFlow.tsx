@@ -151,6 +151,7 @@ export function QRScannerFlow({
     setIsDetecting(false);
     toast.success("Identity Verified Successfully!");
     
+    // Pass the scanned code back to the parent
     setTimeout(() => {
       if (onComplete) onComplete(scannedCode);
       setStep("DONE");
@@ -167,8 +168,10 @@ export function QRScannerFlow({
                 <ScanLine className="h-8 w-8 text-primary" />
               </div>
             </div>
-            <h3 className="font-semibold">Step 1: Scan QR Code</h3>
-            <p className="text-sm text-muted-foreground">Point your camera at the session QR code</p>
+            <h3 className="font-semibold">Step 1: Scan Session QR</h3>
+            <p className="text-sm text-muted-foreground">
+              Scan the dynamic QR code displayed by your instructor.
+            </p>
           </div>
           <div id="reader" className="overflow-hidden rounded-lg border bg-black/5"></div>
         </div>

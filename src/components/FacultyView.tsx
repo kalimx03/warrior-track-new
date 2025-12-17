@@ -1,6 +1,6 @@
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck, Maximize2 } from "lucide-react";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck, Maximize2, RefreshCw } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -301,6 +301,77 @@ function AttendanceManager({ sessionId }: { sessionId: Id<"sessions"> }) {
   );
 }
 
+function DynamicQRDisplay({ sessionId }: { sessionId: Id<"sessions"> }) {
+  // Force refresh every 5 seconds to ensure we always have a valid token
+  // The token is valid for 15s, but we want to update the UI frequently enough
+  const [timestamp, setTimestamp] = useState(Date.now());
+  
+  useEffect(() => {
+    const interval = setInterval(() => setTimestamp(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // We can't easily pass a changing timestamp to useQuery to force refresh if the query is pure
+  // But getDynamicQR depends on server time mostly, but we need to trigger it.
+  // Actually, useQuery automatically subscribes. But the server time changes.
+  // Convex queries are reactive to data, not server time.
+  // So we need to pass the timestamp as an arg to force re-computation?
+  // No, getDynamicQR uses Date.now(). Queries using Date.now() are non-deterministic and might not update automatically.
+  // Better approach: Pass the timestamp as an argument to the query.
+  
+  // Let's modify the query in sessions.ts to accept a timestamp arg (dummy) to force refresh?
+  // Or just use a client-side generation if we had the secret.
+  // Since we don't want to expose secret logic if possible (though we did for static code),
+  // let's stick to the query.
+  
+  // Wait, if I change the query to accept a timestamp, it will return a new token.
+  // Let's modify getDynamicQR in sessions.ts to accept an optional timestamp arg.
+  
+  // Actually, for now, let's assume the query will return the valid token for the current time.
+  // But to force it to refresh, we need to change args.
+  
+  // Let's use a simple trick: pass a "tick" argument.
+  const qrToken = useQuery(api.sessions.getDynamicQR, { sessionId, tick: Math.floor(timestamp / 5000) } as any);
+  const [showFullQR, setShowFullQR] = useState(false);
+
+  if (!qrToken) return <div className="text-sm text-muted-foreground">Generating secure QR...</div>;
+
+  return (
+    <div className="mt-4 flex flex-col items-center">
+      <div className="bg-white p-4 rounded-xl shadow-sm border relative group cursor-pointer" onClick={() => setShowFullQR(true)}>
+        <img 
+          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrToken}`}
+          alt="Session QR Code"
+          className="w-48 h-48"
+        />
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+          <Maximize2 className="text-white h-8 w-8" />
+        </div>
+        {/* Progress bar for token validity could go here */}
+      </div>
+      <div className="text-sm text-muted-foreground mt-4 font-medium flex flex-col items-center gap-1">
+        <span>Scan to verify presence</span>
+        <span className="text-xs text-blue-500 flex items-center gap-1">
+          <RefreshCw className="h-3 w-3 animate-spin" />
+          Refreshing security token...
+        </span>
+      </div>
+
+      <Dialog open={showFullQR} onOpenChange={setShowFullQR}>
+        <DialogContent className="max-w-[80vh] w-full aspect-square flex items-center justify-center">
+          <div className="bg-white p-8 rounded-xl">
+            <img 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${qrToken}`}
+              alt="Full Session QR Code"
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
   const activeSession = useQuery(api.sessions.getActive, { courseId });
   const recentSessions = useQuery(api.sessions.getRecent, { courseId });
@@ -387,36 +458,24 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                   </div>
                 )}
 
-                {activeSession.type === "LAB" && activeSession.code && (
-                  <div className="mt-4 flex flex-col items-center">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border relative group cursor-pointer" onClick={() => setShowFullQR(true)}>
-                      <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.code}`}
-                        alt="Session QR Code"
-                        className="w-48 h-48"
-                      />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
-                        <Maximize2 className="text-white h-8 w-8" />
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-4 font-medium">
-                      Scan to verify presence
-                    </div>
-                  </div>
+                {activeSession.type === "LAB" && (
+                  <DynamicQRDisplay sessionId={activeSession._id} />
                 )}
               </div>
 
-              <Dialog open={showFullQR} onOpenChange={setShowFullQR}>
-                <DialogContent className="max-w-[80vh] w-full aspect-square flex items-center justify-center">
-                  <div className="bg-white p-8 rounded-xl">
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${activeSession.code}`}
-                      alt="Full Session QR Code"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                </DialogContent>
-              </Dialog>
+              {activeSession.type === "THEORY" && (
+                 <Dialog open={showFullQR} onOpenChange={setShowFullQR}>
+                  <DialogContent className="max-w-[80vh] w-full aspect-square flex items-center justify-center">
+                    <div className="bg-white p-8 rounded-xl">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${activeSession.code}`}
+                        alt="Full Session QR Code"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
               
               <div className="flex gap-2">
                 <AttendanceManager sessionId={activeSession._id} />
@@ -444,7 +503,7 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                 </div>
                 <div className="text-center">
                   <div className="font-bold">Start Lab</div>
-                  <span className="text-xs text-muted-foreground">QR Code Mode</span>
+                  <span className="text-xs text-muted-foreground">Secure QR Mode</span>
                 </div>
               </Button>
               <Button 

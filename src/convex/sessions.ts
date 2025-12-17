@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { generateSessionToken } from "./helpers";
 
 export const create = mutation({
   args: {
@@ -139,6 +140,23 @@ export const getRecent = query({
     );
 
     return sessionsWithStats;
+  },
+});
+
+export const getDynamicQR = query({
+  args: { 
+    sessionId: v.id("sessions"),
+    tick: v.optional(v.number()) // Used to force refresh
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || !session.isActive || session.type !== "LAB" || !session.code) {
+      return null;
+    }
+    
+    // Generate token based on current time
+    const token = await generateSessionToken(session.code, Date.now());
+    return token;
   },
 });
 

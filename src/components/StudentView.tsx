@@ -509,16 +509,20 @@ function CourseCard({ course }: { course: any }) {
             {activeSession.type === "LAB" && (
               <Dialog open={isScanOpen} onOpenChange={setIsScanOpen}>
                 <DialogTrigger asChild>
-                  <Button className="w-full" variant="outline" onClick={() => setScanStep("SCAN_QR")}>
-                    <ScanLine className="mr-2 h-4 w-4" />
-                    Scan QR Code
+                  <Button 
+                    className="w-full h-12 text-lg font-semibold shadow-md hover:shadow-lg transition-all" 
+                    variant="default" 
+                    onClick={() => setScanStep("SCAN_QR")}
+                  >
+                    <ScanLine className="mr-2 h-5 w-5" />
+                    Mark Attendance
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Attendance Verification</DialogTitle>
+                    <DialogTitle>Secure Attendance Verification</DialogTitle>
                     <DialogDescription>
-                      Complete the security check to mark attendance.
+                      Two-step verification: QR Scan + Face ID
                     </DialogDescription>
                   </DialogHeader>
                   

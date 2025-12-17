@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { generateSessionToken } from "./helpers";
 
 export const mark = mutation({
   args: {
@@ -29,9 +30,16 @@ export const mark = mutation({
 
     // QR Code Logic for LAB sessions
     if (session.type === "LAB") {
-      // For LAB, the code is the secret embedded in the QR
-      if (session.code && session.code !== args.code) {
-        throw new Error("Invalid QR Code");
+      if (!args.code) throw new Error("QR Code required");
+      
+      // Verify dynamic token
+      // Check current window and previous window (to allow for slight delay/drift)
+      const now = Date.now();
+      const currentToken = await generateSessionToken(session.code!, now);
+      const previousToken = await generateSessionToken(session.code!, now - 15000);
+      
+      if (args.code !== currentToken && args.code !== previousToken) {
+        throw new Error("Invalid or expired QR Code. Please scan again.");
       }
     }
 
