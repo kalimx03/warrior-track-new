@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import * as faceapi from "face-api.js";
 import { toast } from "sonner";
-import { ScanLine, Camera, CheckCircle2, Loader2, AlertCircle, ShieldAlert } from "lucide-react";
+import { ScanLine, Camera, CheckCircle2, Loader2, AlertCircle, ShieldAlert, Eye } from "lucide-react";
 
 interface QRScannerFlowProps {
   onScanSuccess: (code: string) => void;
@@ -17,11 +17,12 @@ export function QRScannerFlow({
   mode,
   storedFaceDescriptor
 }: QRScannerFlowProps) {
-  const [step, setStep] = useState<"SCAN" | "FACE" | "DONE">("SCAN");
+  const [step, setStep] = useState<"SCAN" | "LIVENESS" | "FACE" | "DONE">("SCAN");
   const [scannedCode, setScannedCode] = useState("");
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [matchScore, setMatchScore] = useState<number | null>(null);
+  const [livenessMessage, setLivenessMessage] = useState("Blink to verify you are human");
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -60,7 +61,7 @@ export function QRScannerFlow({
         onScanSuccess(decodedText);
         
         if (mode === "LAB") {
-          setStep("FACE");
+          setStep("LIVENESS");
         } else {
           setStep("DONE");
         }
@@ -77,7 +78,7 @@ export function QRScannerFlow({
   }, [step, mode, onScanSuccess]);
 
   useEffect(() => {
-    if (step === "FACE" && mode === "LAB") {
+    if ((step === "LIVENESS" || step === "FACE") && mode === "LAB") {
       let stream: MediaStream | null = null;
 
       const startCamera = async () => {
@@ -105,10 +106,26 @@ export function QRScannerFlow({
     }
   }, [step, mode]);
 
+  const calculateEAR = (landmarks: faceapi.FaceLandmarks68) => {
+    const getEyeEAR = (points: faceapi.Point[]) => {
+      const v1 = points[1].y - points[5].y;
+      const v2 = points[2].y - points[4].y;
+      const h = points[0].x - points[3].x;
+      return (Math.abs(v1) + Math.abs(v2)) / (2 * Math.abs(h));
+    };
+
+    const leftEye = landmarks.getLeftEye();
+    const rightEye = landmarks.getRightEye();
+    
+    return (getEyeEAR(leftEye) + getEyeEAR(rightEye)) / 2;
+  };
+
   const handleVideoPlay = () => {
     if (!modelsLoaded) return;
     
     setIsDetecting(true);
+    let blinkDetected = false;
+    let consecutiveClosedEyes = 0;
     
     detectionIntervalRef.current = setInterval(async () => {
       if (videoRef.current) {
@@ -120,28 +137,46 @@ export function QRScannerFlow({
             .withFaceDescriptor();
           
           if (detection) {
-            // If we have a stored descriptor, compare it
-            if (storedFaceDescriptor) {
-              const storedDescriptorFloat32 = new Float32Array(storedFaceDescriptor);
-              const distance = faceapi.euclideanDistance(detection.descriptor, storedDescriptorFloat32);
-              
-              // Distance < 0.6 is generally considered a match
-              setMatchScore(distance);
-              
-              if (distance < 0.5) { // Stricter threshold for security
+            if (step === "LIVENESS") {
+              const ear = calculateEAR(detection.landmarks);
+              // EAR threshold for closed eyes is typically around 0.2 - 0.25
+              if (ear < 0.25) {
+                consecutiveClosedEyes++;
+                if (consecutiveClosedEyes > 1) { // Require 2 frames of closed eyes
+                   blinkDetected = true;
+                }
+              } else {
+                consecutiveClosedEyes = 0;
+                if (blinkDetected) {
+                  // Eyes opened after being closed -> Blink complete
+                  toast.success("Liveness Confirmed!");
+                  setStep("FACE");
+                  blinkDetected = false;
+                }
+              }
+            } else if (step === "FACE") {
+              // If we have a stored descriptor, compare it
+              if (storedFaceDescriptor) {
+                const storedDescriptorFloat32 = new Float32Array(storedFaceDescriptor);
+                const distance = faceapi.euclideanDistance(detection.descriptor, storedDescriptorFloat32);
+                
+                // Distance < 0.6 is generally considered a match
+                setMatchScore(distance);
+                
+                if (distance < 0.5) { // Stricter threshold for security
+                  finishVerification();
+                }
+              } else {
+                // Fallback if no descriptor stored
                 finishVerification();
               }
-            } else {
-              // Fallback if no descriptor stored (should ideally force registration)
-              // For now, just detect a face
-              finishVerification();
             }
           }
         } catch (err) {
           console.error("Detection error:", err);
         }
       }
-    }, 500); // Check every 500ms
+    }, 200); // Check every 200ms
   };
 
   const finishVerification = () => {
@@ -177,17 +212,23 @@ export function QRScannerFlow({
         </div>
       )}
 
-      {step === "FACE" && (
+      {(step === "LIVENESS" || step === "FACE") && (
         <div className="space-y-4">
           <div className="text-center space-y-2">
             <div className="flex justify-center">
               <div className="p-3 bg-blue-100 rounded-full">
-                <Camera className="h-8 w-8 text-blue-600" />
+                {step === "LIVENESS" ? (
+                  <Eye className="h-8 w-8 text-blue-600 animate-pulse" />
+                ) : (
+                  <Camera className="h-8 w-8 text-blue-600" />
+                )}
               </div>
             </div>
-            <h3 className="font-semibold">Step 2: Face Verification</h3>
+            <h3 className="font-semibold">
+              {step === "LIVENESS" ? "Step 2: Liveness Check" : "Step 3: Face Verification"}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              {!modelsLoaded ? "Loading AI models..." : "Align your face within the frame..."}
+              {!modelsLoaded ? "Loading AI models..." : (step === "LIVENESS" ? "Please blink your eyes naturally" : "Align your face within the frame")}
             </p>
           </div>
           
@@ -221,19 +262,19 @@ export function QRScannerFlow({
               
               <div className="absolute bottom-4 left-0 right-0 text-center">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 text-white text-xs font-mono backdrop-blur-md border border-white/10">
-                  {isDetecting ? (
+                  {step === "LIVENESS" ? (
                     <>
-                      <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                      VERIFYING IDENTITY...
+                      <Eye className="h-3 w-3" />
+                      WAITING FOR BLINK...
                     </>
                   ) : (
                     <>
-                      <div className="h-2 w-2 rounded-full bg-green-500" />
-                      READY
+                      <div className={`h-2 w-2 rounded-full ${matchScore && matchScore < 0.5 ? 'bg-green-500' : 'bg-blue-500 animate-pulse'}`} />
+                      VERIFYING IDENTITY...
                     </>
                   )}
                 </div>
-                {matchScore !== null && (
+                {matchScore !== null && step === "FACE" && (
                   <div className="mt-2 text-xs text-white/80">
                     Match Score: {matchScore.toFixed(3)}
                   </div>
@@ -242,7 +283,7 @@ export function QRScannerFlow({
             </div>
           </div>
           
-          {!storedFaceDescriptor && (
+          {!storedFaceDescriptor && step === "FACE" && (
             <div className="flex items-center gap-2 p-3 bg-yellow-500/10 text-yellow-600 rounded-lg text-sm">
               <ShieldAlert className="h-4 w-4 shrink-0" />
               Warning: No Face ID registered. Using basic detection.

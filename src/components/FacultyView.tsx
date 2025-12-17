@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck, Maximize2, RefreshCw } from "lucide-react";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar, Settings, Edit, Check, X, UserCheck, Maximize2, RefreshCw, Lock, Unlock, RotateCcw } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -303,7 +303,6 @@ function AttendanceManager({ sessionId }: { sessionId: Id<"sessions"> }) {
 
 function DynamicQRDisplay({ sessionId }: { sessionId: Id<"sessions"> }) {
   // Force refresh every 5 seconds to ensure we always have a valid token
-  // The token is valid for 15s, but we want to update the UI frequently enough
   const [timestamp, setTimestamp] = useState(Date.now());
   
   useEffect(() => {
@@ -311,28 +310,17 @@ function DynamicQRDisplay({ sessionId }: { sessionId: Id<"sessions"> }) {
     return () => clearInterval(interval);
   }, []);
 
-  // We can't easily pass a changing timestamp to useQuery to force refresh if the query is pure
-  // But getDynamicQR depends on server time mostly, but we need to trigger it.
-  // Actually, useQuery automatically subscribes. But the server time changes.
-  // Convex queries are reactive to data, not server time.
-  // So we need to pass the timestamp as an arg to force re-computation?
-  // No, getDynamicQR uses Date.now(). Queries using Date.now() are non-deterministic and might not update automatically.
-  // Better approach: Pass the timestamp as an argument to the query.
-  
-  // Let's modify the query in sessions.ts to accept a timestamp arg (dummy) to force refresh?
-  // Or just use a client-side generation if we had the secret.
-  // Since we don't want to expose secret logic if possible (though we did for static code),
-  // let's stick to the query.
-  
-  // Wait, if I change the query to accept a timestamp, it will return a new token.
-  // Let's modify getDynamicQR in sessions.ts to accept an optional timestamp arg.
-  
-  // Actually, for now, let's assume the query will return the valid token for the current time.
-  // But to force it to refresh, we need to change args.
-  
-  // Let's use a simple trick: pass a "tick" argument.
   const qrToken = useQuery(api.sessions.getDynamicQR, { sessionId, tick: Math.floor(timestamp / 5000) } as any);
   const [showFullQR, setShowFullQR] = useState(false);
+
+  if (qrToken === "LOCKED") {
+    return (
+      <div className="mt-4 flex flex-col items-center justify-center h-48 w-48 bg-muted/20 rounded-xl border-2 border-dashed border-muted-foreground/20">
+        <Lock className="h-12 w-12 text-muted-foreground/50 mb-2" />
+        <span className="text-sm font-medium text-muted-foreground">Session Locked</span>
+      </div>
+    );
+  }
 
   if (!qrToken) return <div className="text-sm text-muted-foreground">Generating secure QR...</div>;
 
@@ -347,7 +335,6 @@ function DynamicQRDisplay({ sessionId }: { sessionId: Id<"sessions"> }) {
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
           <Maximize2 className="text-white h-8 w-8" />
         </div>
-        {/* Progress bar for token validity could go here */}
       </div>
       <div className="text-sm text-muted-foreground mt-4 font-medium flex flex-col items-center gap-1">
         <span>Scan to verify presence</span>
@@ -377,13 +364,15 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
   const recentSessions = useQuery(api.sessions.getRecent, { courseId });
   const createSession = useMutation(api.sessions.create);
   const endSession = useMutation(api.sessions.end);
+  const toggleLock = useMutation(api.sessions.toggleLock);
+  const regenerateCode = useMutation(api.sessions.regenerateCode);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [showFullQR, setShowFullQR] = useState(false);
 
   const handleStartSession = async (type: "LAB" | "THEORY") => {
     setIsLoading(true);
     try {
-      // Code generation is now handled in backend
       await createSession({ courseId, type });
       toast.success(`${type} Session Deployed`);
     } catch (error) {
@@ -406,10 +395,30 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
     }
   };
 
+  const handleToggleLock = async () => {
+    if (!activeSession) return;
+    try {
+      const isLocked = await toggleLock({ sessionId: activeSession._id });
+      toast.success(isLocked ? "Session Locked" : "Session Unlocked");
+    } catch (error) {
+      toast.error("Failed to toggle lock");
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!activeSession) return;
+    try {
+      await regenerateCode({ sessionId: activeSession._id });
+      toast.success("Security Code Regenerated");
+    } catch (error) {
+      toast.error("Failed to regenerate code");
+    }
+  };
+
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card className="elevation-2 border-none bg-primary/5 overflow-hidden relative">
-        {activeSession && (
+        {activeSession && !activeSession.isLocked && (
           <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-transparent via-primary to-transparent animate-pulse" />
         )}
         <CardHeader>
@@ -424,10 +433,16 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
             <div className="space-y-6">
               <div className="p-6 bg-background rounded-xl border shadow-xs text-center relative overflow-hidden">
                 <div className="absolute top-2 right-2">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                  </span>
+                  {activeSession.isLocked ? (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      <Lock className="w-3 h-3 mr-1" /> Locked
+                    </span>
+                  ) : (
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                  )}
                 </div>
                 
                 <div className="text-sm text-muted-foreground uppercase tracking-wider mb-2 font-semibold">
@@ -461,6 +476,32 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
                 {activeSession.type === "LAB" && (
                   <DynamicQRDisplay sessionId={activeSession._id} />
                 )}
+              </div>
+
+              {/* Controls Toolbar */}
+              <div className="flex items-center justify-center gap-2 p-2 bg-background rounded-lg border">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleToggleLock}
+                  className={activeSession.isLocked ? "text-red-600 hover:text-red-700 hover:bg-red-50" : "text-green-600 hover:text-green-700 hover:bg-green-50"}
+                  title={activeSession.isLocked ? "Unlock Session" : "Lock Session"}
+                >
+                  {activeSession.isLocked ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                  {activeSession.isLocked ? "Unlock" : "Lock"}
+                </Button>
+                
+                <div className="w-px h-4 bg-border" />
+                
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleRegenerate}
+                  title="Regenerate Code"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Regenerate
+                </Button>
               </div>
 
               {activeSession.type === "THEORY" && (

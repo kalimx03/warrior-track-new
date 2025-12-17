@@ -42,6 +42,7 @@ export const create = mutation({
       type: args.type,
       code: sessionCode,
       isActive: true,
+      isLocked: false, // Default to unlocked
       createdBy: userId,
     });
 
@@ -103,6 +104,43 @@ export const end = mutation({
   },
 });
 
+export const toggleLock = mutation({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.createdBy !== userId) throw new Error("Unauthorized");
+
+    await ctx.db.patch(args.sessionId, { isLocked: !session.isLocked });
+    return !session.isLocked;
+  },
+});
+
+export const regenerateCode = mutation({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.createdBy !== userId) throw new Error("Unauthorized");
+
+    let newCode;
+    if (session.type === "THEORY") {
+      newCode = Math.floor(100000 + Math.random() * 900000).toString();
+    } else {
+      newCode = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    }
+
+    await ctx.db.patch(args.sessionId, { code: newCode });
+    return newCode;
+  },
+});
+
 export const getActive = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, args) => {
@@ -152,6 +190,10 @@ export const getDynamicQR = query({
     const session = await ctx.db.get(args.sessionId);
     if (!session || !session.isActive || session.type !== "LAB" || !session.code) {
       return null;
+    }
+    
+    if (session.isLocked) {
+      return "LOCKED";
     }
     
     // Generate token based on current time

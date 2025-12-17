@@ -58,6 +58,7 @@ const schema = defineSchema(
       type: v.union(v.literal("LAB"), v.literal("THEORY")),
       code: v.optional(v.string()), // PIN for theory
       isActive: v.boolean(),
+      isLocked: v.optional(v.boolean()), // New field for pausing attendance
       createdBy: v.id("users"),
     }).index("by_course", ["courseId"])
       .index("by_active", ["isActive"]),

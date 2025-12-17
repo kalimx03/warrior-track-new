@@ -15,6 +15,7 @@ export const mark = mutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!session.isActive) throw new Error("Session is not active");
+    if (session.isLocked) throw new Error("Session is currently locked by faculty");
 
     // PIN Expiration Logic (5 minutes) for THEORY sessions
     if (session.type === "THEORY") {
