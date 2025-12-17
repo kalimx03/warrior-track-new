@@ -12,6 +12,7 @@ import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as auth_emailOtp from "../auth/emailOtp.js";
 import type * as courses from "../courses.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "auth/emailOtp": typeof auth_emailOtp;
   courses: typeof courses;
+  crons: typeof crons;
   email: typeof email;
   helpers: typeof helpers;
   http: typeof http;

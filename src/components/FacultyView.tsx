@@ -468,7 +468,7 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
 
                     <div className="text-sm text-muted-foreground flex items-center justify-center gap-2">
                       <Clock className="h-4 w-4" />
-                      PIN expires in 5 minutes
+                      PIN auto-refreshes every 5 minutes
                     </div>
                   </div>
                 )}

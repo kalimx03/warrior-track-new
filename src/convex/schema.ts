@@ -60,6 +60,7 @@ const schema = defineSchema(
       isActive: v.boolean(),
       isLocked: v.optional(v.boolean()), // New field for pausing attendance
       createdBy: v.id("users"),
+      lastCodeUpdate: v.optional(v.number()),
     }).index("by_course", ["courseId"])
       .index("by_active", ["isActive"]),
 

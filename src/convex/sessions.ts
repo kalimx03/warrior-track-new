@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { generateSessionToken } from "./helpers";
 
@@ -44,6 +44,7 @@ export const create = mutation({
       isActive: true,
       isLocked: false, // Default to unlocked
       createdBy: userId,
+      lastCodeUpdate: Date.now(),
     });
 
     // Notify enrolled students
@@ -136,8 +137,38 @@ export const regenerateCode = mutation({
       newCode = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     }
 
-    await ctx.db.patch(args.sessionId, { code: newCode });
+    await ctx.db.patch(args.sessionId, { 
+      code: newCode,
+      lastCodeUpdate: Date.now()
+    });
     return newCode;
+  },
+});
+
+export const refreshActiveTheoryCodes = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+    const activeSessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect();
+
+    for (const session of activeSessions) {
+      if (session.type === "THEORY" && !session.isLocked) {
+        const lastUpdate = session.lastCodeUpdate || session.startTime;
+        // If code is older than refresh interval, rotate it
+        if (now - lastUpdate >= REFRESH_INTERVAL) {
+           const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+           await ctx.db.patch(session._id, {
+             code: newCode,
+             lastCodeUpdate: now,
+           });
+        }
+      }
+    }
   },
 });
 
