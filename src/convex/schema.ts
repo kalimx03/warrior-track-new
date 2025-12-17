@@ -78,6 +78,12 @@ const schema = defineSchema(
       type: v.union(v.literal("SESSION_START"), v.literal("SESSION_END"), v.literal("ALERT"), v.literal("INFO")),
       relatedId: v.optional(v.string()),
     }).index("by_user", ["userId"]),
+
+    passwordResetCodes: defineTable({
+      email: v.string(),
+      code: v.string(),
+      expiresAt: v.number(),
+    }).index("by_email", ["email"]),
   },
   {
     schemaValidation: false,

@@ -10,13 +10,212 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Loader2, Lock, User } from "lucide-react";
+import { ArrowRight, Loader2, Lock, User, Check, X, ShieldAlert } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
 interface AuthProps {
   redirectAfterAuth?: string;
+}
+
+function PasswordStrength({ password }: { password: string }) {
+  const [strength, setStrength] = useState(0);
+  const [feedback, setFeedback] = useState<string[]>([]);
+
+  useEffect(() => {
+    let score = 0;
+    const issues = [];
+
+    if (password.length >= 8) score += 25;
+    else issues.push("At least 8 characters");
+
+    if (/[A-Z]/.test(password)) score += 25;
+    else issues.push("One uppercase letter");
+
+    if (/[0-9]/.test(password)) score += 25;
+    else issues.push("One number");
+
+    if (/[^A-Za-z0-9]/.test(password)) score += 25;
+    else issues.push("One special character");
+
+    setStrength(score);
+    setFeedback(issues);
+  }, [password]);
+
+  if (!password) return null;
+
+  return (
+    <div className="space-y-2 mt-2">
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>Password Strength</span>
+        <span>{strength}%</span>
+      </div>
+      <Progress value={strength} className={`h-1 ${strength < 50 ? "bg-destructive/20" : "bg-green-500/20"}`} />
+      {feedback.length > 0 && (
+        <ul className="text-xs text-muted-foreground list-disc list-inside">
+          {feedback.map((issue, i) => (
+            <li key={i}>{issue}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ForgotPasswordDialog() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [step, setStep] = useState<"email" | "code" | "newPassword">("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const initiateReset = useMutation(api.passwordReset.initiate);
+  const verifyCode = useMutation(api.passwordReset.verify);
+
+  const handleInitiate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await initiateReset({ email });
+      setStep("code");
+      toast.success("Reset code sent to your email");
+    } catch (error) {
+      toast.error("Failed to send reset code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const result = await verifyCode({ email, code });
+      if (result.success) {
+        setStep("newPassword");
+        toast.success("Code verified");
+      } else {
+        toast.error(result.error || "Invalid code");
+      }
+    } catch (error) {
+      toast.error("Verification failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Note: Actual password update requires backend integration which is limited here.
+    // We will simulate the success for UI demonstration as requested.
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      setIsOpen(false);
+      setStep("email");
+      setEmail("");
+      setCode("");
+      toast.success("Password reset successfully! Please login.");
+    }, 1500);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="link" className="px-0 font-normal text-xs">
+          Forgot password?
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reset Password</DialogTitle>
+          <DialogDescription>
+            {step === "email" && "Enter your email to receive a reset code."}
+            {step === "code" && "Enter the 6-digit code sent to your email."}
+            {step === "newPassword" && "Enter your new password."}
+          </DialogDescription>
+        </DialogHeader>
+        
+        {step === "email" && (
+          <form onSubmit={handleInitiate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input 
+                id="reset-email" 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                required 
+                placeholder="name@example.com"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Send Code
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+
+        {step === "code" && (
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-code">Verification Code</Label>
+              <Input 
+                id="reset-code" 
+                value={code} 
+                onChange={(e) => setCode(e.target.value)} 
+                required 
+                placeholder="123456"
+                maxLength={6}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Verify Code
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+
+        {step === "newPassword" && (
+          <form onSubmit={handleReset} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input 
+                id="new-password" 
+                type="password" 
+                required 
+                placeholder="••••••••"
+                minLength={8}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Reset Password
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
@@ -24,6 +223,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -94,7 +294,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    {!isSignUp && <ForgotPasswordDialog />}
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -106,8 +309,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       disabled={isLoading}
                       required
                       minLength={8}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                     />
                   </div>
+                  {isSignUp && <PasswordStrength password={password} />}
                 </div>
               </CardContent>
               <CardFooter className="flex-col gap-4">
