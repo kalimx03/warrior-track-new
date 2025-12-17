@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { Html5QrcodeScanner } from "html5-qrcode";
 import * as faceapi from "face-api.js";
 import { toast } from "sonner";
 import { ScanLine, Camera, CheckCircle2, Loader2, AlertCircle, ShieldAlert, Eye, RefreshCw } from "lucide-react";
@@ -71,7 +71,7 @@ export function QRScannerFlow({
             qrbox: { width: 250, height: 250 },
             aspectRatio: 1.0,
             showTorchButtonIfSupported: true,
-            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+            // Default to all formats or use 0 for QR_CODE if needed, but omitting is safer for imports
           },
           /* verbose= */ false
         );
