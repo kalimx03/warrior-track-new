@@ -247,11 +247,16 @@ export default function Auth({ redirectAfterAuth }: AuthProps) {
     try {
       if (isSignUp) {
         await signIn("password", { email: emailInput, password: passwordInput, flow: "signUp" });
+        // Auto-login is handled by the provider, but we can show a success message
+        toast.success("Account created successfully!");
       } else {
         await signIn("password", { email: emailInput, password: passwordInput, flow: "signIn" });
+        toast.success("Signed in successfully!");
       }
     } catch (error) {
-      toast.error("Authentication failed. Please check your credentials.");
+      console.error("Auth error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Authentication failed";
+      toast.error(isSignUp ? "Failed to create account. Email might be taken." : "Invalid credentials.");
       setIsLoading(false);
     }
   };
