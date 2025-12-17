@@ -7,12 +7,16 @@ export const ROLES = {
   ADMIN: "admin",
   USER: "user",
   MEMBER: "member",
+  FACULTY: "faculty",
+  STUDENT: "student",
 } as const;
 
 export const roleValidator = v.union(
   v.literal(ROLES.ADMIN),
   v.literal(ROLES.USER),
   v.literal(ROLES.MEMBER),
+  v.literal(ROLES.FACULTY),
+  v.literal(ROLES.STUDENT),
 );
 export type Role = Infer<typeof roleValidator>;
 
@@ -32,12 +36,39 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
-    // add other tables here
+    courses: defineTable({
+      name: v.string(),
+      code: v.string(),
+      description: v.optional(v.string()),
+      facultyId: v.id("users"),
+    }).index("by_faculty", ["facultyId"]),
 
-    // tableName: defineTable({
-    //   ...
-    //   // table fields
-    // }).index("by_field", ["field"])
+    enrollments: defineTable({
+      courseId: v.id("courses"),
+      studentId: v.id("users"),
+    }).index("by_course", ["courseId"])
+      .index("by_student", ["studentId"])
+      .index("by_course_and_student", ["courseId", "studentId"]),
+
+    sessions: defineTable({
+      courseId: v.id("courses"),
+      startTime: v.number(),
+      endTime: v.optional(v.number()),
+      type: v.union(v.literal("LAB"), v.literal("THEORY")),
+      code: v.optional(v.string()), // PIN for theory
+      isActive: v.boolean(),
+      createdBy: v.id("users"),
+    }).index("by_course", ["courseId"])
+      .index("by_active", ["isActive"]),
+
+    attendance: defineTable({
+      sessionId: v.id("sessions"),
+      studentId: v.id("users"),
+      timestamp: v.number(),
+      status: v.union(v.literal("PRESENT"), v.literal("ABSENT")),
+    }).index("by_session", ["sessionId"])
+      .index("by_student", ["studentId"])
+      .index("by_session_and_student", ["sessionId", "studentId"]),
   },
   {
     schemaValidation: false,

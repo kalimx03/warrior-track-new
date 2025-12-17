@@ -1,0 +1,314 @@
+import { api } from "@/convex/_generated/api";
+import { useMutation, useQuery } from "convex/react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3 } from "lucide-react";
+import { Id } from "@/convex/_generated/dataModel";
+
+export default function FacultyView() {
+  const courses = useQuery(api.courses.listByFaculty);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold tracking-tight">General's Command Center</h1>
+        <CreateCourseDialog />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="elevation-1 border-none">
+          <CardHeader>
+            <CardTitle>Active Courses</CardTitle>
+            <CardDescription>Manage your troops</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-primary">{courses?.length || 0}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs defaultValue="sessions" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+          <TabsTrigger value="sessions">Sessions</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+        </TabsList>
+        <TabsContent value="sessions" className="space-y-4 mt-4">
+          <div className="flex items-center gap-4">
+            <Select value={selectedCourseId || ""} onValueChange={setSelectedCourseId}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue placeholder="Select a course to manage" />
+              </SelectTrigger>
+              <SelectContent>
+                {courses?.map((course) => (
+                  <SelectItem key={course._id} value={course._id}>
+                    {course.code} - {course.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedCourseId && (
+            <SessionManager courseId={selectedCourseId as Id<"courses">} />
+          )}
+        </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          {selectedCourseId ? (
+            <CourseReport courseId={selectedCourseId as Id<"courses">} />
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              Select a course to view reports
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function CreateCourseDialog() {
+  const createCourse = useMutation(api.courses.create);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    const formData = new FormData(e.currentTarget);
+    try {
+      await createCourse({
+        name: formData.get("name") as string,
+        code: formData.get("code") as string,
+        description: formData.get("description") as string,
+      });
+      toast.success("Course created successfully");
+      setIsOpen(false);
+      (e.target as HTMLFormElement).reset();
+    } catch (error) {
+      toast.error("Failed to create course");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <Button onClick={() => setIsOpen(!isOpen)}>
+        <Plus className="mr-2 h-4 w-4" /> Deploy New Course
+      </Button>
+      {isOpen && (
+        <Card className="absolute top-12 right-0 w-[350px] z-50 elevation-3">
+          <CardHeader>
+            <CardTitle>New Course Deployment</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Course Name</Label>
+                <Input id="name" name="name" required placeholder="e.g. Advanced Combat Tactics" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="code">Course Code</Label>
+                <Input id="code" name="code" required placeholder="e.g. CS301" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Input id="description" name="description" placeholder="Brief mission briefing" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Deploy"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
+  const activeSession = useQuery(api.sessions.getActive, { courseId });
+  const createSession = useMutation(api.sessions.create);
+  const endSession = useMutation(api.sessions.end);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleStartSession = async (type: "LAB" | "THEORY") => {
+    setIsLoading(true);
+    try {
+      const code = type === "THEORY" ? Math.floor(100000 + Math.random() * 900000).toString() : undefined;
+      await createSession({ courseId, type, code });
+      toast.success(`${type} Session Deployed`);
+    } catch (error) {
+      toast.error("Failed to start session");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEndSession = async () => {
+    if (!activeSession) return;
+    setIsLoading(true);
+    try {
+      await endSession({ sessionId: activeSession._id });
+      toast.success("Session Ended");
+    } catch (error) {
+      toast.error("Failed to end session");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <Card className="elevation-2 border-none bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5" />
+            Session Control
+          </CardTitle>
+          <CardDescription>Deploy attendance tracking</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {activeSession ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-background rounded-lg border text-center">
+                <div className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Active Session</div>
+                <div className="text-2xl font-bold text-primary">{activeSession.type}</div>
+                {activeSession.code && (
+                  <div className="mt-4">
+                    <div className="text-sm text-muted-foreground mb-1">Access PIN</div>
+                    <div className="text-4xl font-mono font-bold tracking-widest">{activeSession.code}</div>
+                    <div className="text-xs text-muted-foreground mt-2">Valid for 5 minutes</div>
+                  </div>
+                )}
+              </div>
+              <Button 
+                variant="destructive" 
+                className="w-full" 
+                onClick={handleEndSession}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                End Session
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <Button 
+                className="h-24 flex flex-col gap-2" 
+                variant="outline"
+                onClick={() => handleStartSession("LAB")}
+                disabled={isLoading}
+              >
+                <QrCode className="h-6 w-6" />
+                Start Lab
+                <span className="text-xs font-normal text-muted-foreground">QR Code Mode</span>
+              </Button>
+              <Button 
+                className="h-24 flex flex-col gap-2" 
+                variant="outline"
+                onClick={() => handleStartSession("THEORY")}
+                disabled={isLoading}
+              >
+                <Users className="h-6 w-6" />
+                Start Theory
+                <span className="text-xs font-normal text-muted-foreground">PIN Code Mode</span>
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="elevation-1 border-none">
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Latest session logs</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-muted-foreground text-center py-8">
+            Select a course to view history
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CourseReport({ courseId }: { courseId: Id<"courses"> }) {
+  const report = useQuery(api.attendance.getCourseReport, { courseId });
+
+  if (!report) return <div className="p-4 text-center">Loading report...</div>;
+
+  const atRisk = report.filter(r => r.percentage < 75);
+
+  return (
+    <div className="space-y-6">
+      {atRisk.length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5 elevation-1">
+          <CardHeader>
+            <CardTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Warriors at Risk
+            </CardTitle>
+            <CardDescription>Attendance below 75% threshold</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {atRisk.map((r, i) => (
+                <div key={i} className="flex justify-between items-center p-2 bg-background/50 rounded">
+                  <span className="font-medium">{r.student?.name || r.student?.email}</span>
+                  <span className="text-destructive font-bold">{r.percentage.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="elevation-1 border-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Lokyodha Status Report
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="p-3 text-left font-medium">Warrior</th>
+                  <th className="p-3 text-center font-medium">Attended</th>
+                  <th className="p-3 text-center font-medium">Total</th>
+                  <th className="p-3 text-right font-medium">Readiness Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.map((r, i) => (
+                  <tr key={i} className="border-b last:border-0 hover:bg-muted/20">
+                    <td className="p-3">{r.student?.name || r.student?.email}</td>
+                    <td className="p-3 text-center">{r.attended}</td>
+                    <td className="p-3 text-center">{r.total}</td>
+                    <td className={`p-3 text-right font-bold ${r.percentage < 75 ? 'text-destructive' : 'text-green-600'}`}>
+                      {r.percentage.toFixed(1)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
