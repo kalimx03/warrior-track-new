@@ -30,7 +30,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Html5QrcodeScanner } from "html5-qrcode";
 import { useEffect, useRef } from "react";
 import { QRScannerFlow } from "./QRScannerFlow";
 import { FaceRegistration } from "./FaceRegistration";

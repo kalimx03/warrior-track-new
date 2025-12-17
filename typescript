@@ -1,14 +1,70 @@
-import { v } from "convex/values";
+EDIT FILE src/components/QRScannerFlow.tsx
+// ... (rest of the file remains the same until this useEffect)
 
-export async function generateSessionToken(secret: string, timestamp: number) {
-  const windowStep = Math.floor(timestamp / 15000);
-  // ...
-}
+  useEffect(() => {
+    if (step === "SCAN") {
+      // Ensure element exists and scanner isn't already running
+      if (!document.getElementById("reader") || scannerRef.current) return;
 
-const currentToken = await generateSessionToken(session.code!, now);
-const previousToken = await generateSessionToken(session.code!, now - 15000);
-const previousToken2 = await generateSessionToken(session.code!, now - 30000);
+      // Initialize scanner
+      const scanner = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        /* verbose= */ false
+      );
       
-if (args.code !== currentToken && args.code !== previousToken && args.code !== previousToken2) {
-  throw new Error("Invalid or expired QR Code. Please scan again.");
-}
+      scanner.render((decodedText: string) => {
+        // Clear the scanner to remove the UI and stop the camera BEFORE updating state
+        // This prevents the "Cannot read properties of null (reading 'style')" error
+        scanner.clear().then(() => {
+          // Prevent cleanup from trying to clear again
+          // Ensure scannerRef.current is nullified *before* state change potentially unmounts it
+          if (scannerRef.current === scanner) {
+            scannerRef.current = null;
+          }
+          
+          setScannedCode(decodedText);
+          onScanSuccess(decodedText);
+          
+          // Delaying the step change to give html5-qrcode a moment to fully clean up DOM
+          setTimeout(() => {
+            if (mode === "LAB") {
+              setStep("LIVENESS");
+            } else {
+              setStep("DONE");
+            }
+          }, 100); // Small delay to allow html5-qrcode's internal DOM cleanup to complete
+        }).catch((err) => {
+          console.error("Failed to clear scanner or transition step", err);
+          // Proceed anyway, but ensure scanner ref is cleared
+          if (scannerRef.current) {
+            scannerRef.current = null;
+          }
+          setScannedCode(decodedText);
+          onScanSuccess(decodedText);
+          setTimeout(() => {
+            if (mode === "LAB") {
+              setStep("LIVENESS");
+            } else {
+              setStep("DONE");
+            }
+          }, 100);
+        });
+      }, (error: any) => {
+        // handle scan error if needed
+      });
+      
+      scannerRef.current = scanner;
+
+      return () => {
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch((err) => {
+             console.warn("Scanner cleanup error", err);
+          });
+          scannerRef.current = null;
+        }
+      };
+    }
+  }, [step, mode, onScanSuccess]);
+
+// ... (rest of the file)

@@ -48,6 +48,9 @@ export function QRScannerFlow({
 
   useEffect(() => {
     if (step === "SCAN") {
+      // Ensure element exists and scanner isn't already running
+      if (!document.getElementById("reader") || scannerRef.current) return;
+
       // Initialize scanner
       const scanner = new Html5QrcodeScanner(
         "reader",
@@ -56,15 +59,33 @@ export function QRScannerFlow({
       );
       
       scanner.render((decodedText: string) => {
-        scanner.clear();
-        setScannedCode(decodedText);
-        onScanSuccess(decodedText);
-        
-        if (mode === "LAB") {
-          setStep("LIVENESS");
-        } else {
-          setStep("DONE");
-        }
+        // Clear the scanner to remove the UI and stop the camera BEFORE updating state
+        // This prevents the "Cannot read properties of null (reading 'style')" error
+        scanner.clear().then(() => {
+          // Prevent cleanup from trying to clear again
+          if (scannerRef.current === scanner) {
+            scannerRef.current = null;
+          }
+          
+          setScannedCode(decodedText);
+          onScanSuccess(decodedText);
+          
+          if (mode === "LAB") {
+            setStep("LIVENESS");
+          } else {
+            setStep("DONE");
+          }
+        }).catch((err) => {
+          console.error("Failed to clear scanner", err);
+          // Proceed anyway
+          setScannedCode(decodedText);
+          onScanSuccess(decodedText);
+          if (mode === "LAB") {
+            setStep("LIVENESS");
+          } else {
+            setStep("DONE");
+          }
+        });
       }, (error: any) => {
         // handle scan error if needed
       });
@@ -72,7 +93,12 @@ export function QRScannerFlow({
       scannerRef.current = scanner;
 
       return () => {
-        scanner.clear().catch(console.error);
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch((err) => {
+             console.warn("Scanner cleanup error", err);
+          });
+          scannerRef.current = null;
+        }
       };
     }
   }, [step, mode, onScanSuccess]);
