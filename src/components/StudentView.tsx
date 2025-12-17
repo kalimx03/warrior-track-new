@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, ScanLine, History, Calendar, Clock } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import {
   Dialog,
@@ -75,11 +75,13 @@ export default function StudentView() {
 function CourseCard({ course }: { course: any }) {
   const stats = useQuery(api.attendance.getStats, { courseId: course._id });
   const activeSession = useQuery(api.sessions.getActive, { courseId: course._id });
+  const history = useQuery(api.attendance.getStudentHistory, { courseId: course._id });
   const markAttendance = useMutation(api.attendance.mark);
   const [pin, setPin] = useState("");
   const [qrCode, setQrCode] = useState("");
   const [isMarking, setIsMarking] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const handleMarkAttendance = async (codeToUse?: string) => {
     if (!activeSession) return;
@@ -198,6 +200,50 @@ function CourseCard({ course }: { course: any }) {
             No active session deployed
           </div>
         )}
+
+        <Dialog open={showHistory} onOpenChange={setShowHistory}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" className="w-full text-muted-foreground hover:text-primary">
+              <History className="mr-2 h-4 w-4" />
+              View Attendance History
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Attendance History</DialogTitle>
+              <DialogDescription>{course.name} ({course.code})</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              {!history ? (
+                <div className="text-center py-4">Loading history...</div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">No sessions recorded yet.</div>
+              ) : (
+                history.map((session) => (
+                  <div key={session._id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${session.status === 'PRESENT' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {session.status === 'PRESENT' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">{session.type} Session</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(session.startTime).toLocaleDateString()}
+                          <Clock className="h-3 w-3 ml-1" />
+                          {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`text-sm font-bold ${session.status === 'PRESENT' ? 'text-green-600' : 'text-destructive'}`}>
+                      {session.status}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

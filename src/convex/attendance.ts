@@ -88,6 +88,40 @@ export const getStats = query({
   },
 });
 
+export const getStudentHistory = query({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .order("desc")
+      .collect();
+
+    const history = await Promise.all(
+      sessions.map(async (session) => {
+        const attendance = await ctx.db
+          .query("attendance")
+          .withIndex("by_session_and_student", (q) =>
+            q.eq("sessionId", session._id).eq("studentId", userId)
+          )
+          .first();
+
+        return {
+          _id: session._id,
+          startTime: session.startTime,
+          type: session.type,
+          status: attendance ? "PRESENT" : "ABSENT",
+        };
+      })
+    );
+
+    return history;
+  },
+});
+
 export const getCourseReport = query({
   args: { courseId: v.id("courses") },
   handler: async (ctx, args) => {
@@ -138,7 +172,11 @@ export const getCourseReport = query({
 });
 
 export const getTrends = query({
-  args: { courseId: v.id("courses") },
+  args: { 
+    courseId: v.id("courses"),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
@@ -150,7 +188,14 @@ export const getTrends = query({
       .order("asc")
       .collect();
 
-    if (sessions.length === 0) return [];
+    // Filter by date range if provided
+    const filteredSessions = sessions.filter((s) => {
+      if (args.startDate && s.startTime < args.startDate) return false;
+      if (args.endDate && s.startTime > args.endDate) return false;
+      return true;
+    });
+
+    if (filteredSessions.length === 0) return [];
 
     // Get total enrolled students for capacity calculation
     const enrollments = await ctx.db
@@ -163,7 +208,7 @@ export const getTrends = query({
     // Note: In a production app with large data, this aggregation should be optimized 
     // or pre-calculated. For MVP, we'll do it here.
     const trends = await Promise.all(
-      sessions.map(async (session) => {
+      filteredSessions.map(async (session) => {
         const attendanceCount = await ctx.db
           .query("attendance")
           .withIndex("by_session", (q) => q.eq("sessionId", session._id))

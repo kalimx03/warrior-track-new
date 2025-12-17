@@ -1,6 +1,6 @@
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Loader2, Plus, QrCode, Users, AlertTriangle, BarChart3, Clock, Calendar
 import { Id } from "@/convex/_generated/dataModel";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { startOfWeek, startOfMonth, format, isSameWeek, isSameMonth, parseISO } from "date-fns";
 
 export default function FacultyView() {
   const courses = useQuery(api.courses.listByFaculty);
@@ -293,9 +294,87 @@ function SessionManager({ courseId }: { courseId: Id<"courses"> }) {
 }
 
 function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
-  const trends = useQuery(api.attendance.getTrends, { courseId });
+  const [timeRange, setTimeRange] = useState<"all" | "month" | "week">("all");
+  const [aggregation, setAggregation] = useState<"day" | "week" | "month">("day");
 
-  if (!trends || trends.length === 0) return null;
+  // Calculate date range
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    if (timeRange === "week") {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      return { startDate: start.getTime(), endDate: now.getTime() };
+    }
+    if (timeRange === "month") {
+      const start = new Date(now);
+      start.setMonth(now.getMonth() - 1);
+      return { startDate: start.getTime(), endDate: now.getTime() };
+    }
+    return { startDate: undefined, endDate: undefined };
+  }, [timeRange]);
+
+  const trends = useQuery(api.attendance.getTrends, { 
+    courseId, 
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate 
+  });
+
+  const chartData = useMemo(() => {
+    if (!trends || trends.length === 0) return [];
+
+    if (aggregation === "day") return trends;
+
+    // Aggregate data
+    const groupedData = new Map<string, { 
+      date: string; 
+      timestamp: number; 
+      attendance: number; 
+      absent: number; 
+      count: number 
+    }>();
+
+    trends.forEach((item) => {
+      const date = new Date(item.timestamp);
+      let key = "";
+      let label = "";
+
+      if (aggregation === "week") {
+        const start = startOfWeek(date);
+        key = start.toISOString();
+        label = `Week of ${format(start, "MMM d")}`;
+      } else if (aggregation === "month") {
+        const start = startOfMonth(date);
+        key = start.toISOString();
+        label = format(start, "MMMM yyyy");
+      }
+
+      if (!groupedData.has(key)) {
+        groupedData.set(key, {
+          date: label,
+          timestamp: new Date(key).getTime(),
+          attendance: 0,
+          absent: 0,
+          count: 0
+        });
+      }
+
+      const group = groupedData.get(key)!;
+      group.attendance += item.attendance;
+      group.absent += item.absent;
+      group.count += 1;
+    });
+
+    // Average the stats for the period
+    return Array.from(groupedData.values()).map(group => ({
+      ...group,
+      attendance: Math.round(group.attendance / group.count),
+      absent: Math.round(group.absent / group.count),
+    })).sort((a, b) => a.timestamp - b.timestamp);
+
+  }, [trends, aggregation]);
+
+  if (!trends) return <div className="p-8 text-center text-muted-foreground">Loading trends...</div>;
+  if (trends.length === 0) return <div className="p-8 text-center text-muted-foreground">No attendance data available for this period</div>;
 
   const chartConfig = {
     attendance: {
@@ -311,16 +390,42 @@ function AttendanceTrends({ courseId }: { courseId: Id<"courses"> }) {
   return (
     <Card className="elevation-1 border-none">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5" />
-          Attendance Trends
-        </CardTitle>
-        <CardDescription>Real-time session attendance tracking</CardDescription>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Attendance Trends
+            </CardTitle>
+            <CardDescription>Real-time session attendance tracking</CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Select value={timeRange} onValueChange={(v: any) => setTimeRange(v)}>
+              <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectValue placeholder="Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="month">Last 30 Days</SelectItem>
+                <SelectItem value="week">Last 7 Days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={aggregation} onValueChange={(v: any) => setAggregation(v)}>
+              <SelectTrigger className="w-[120px] h-8 text-xs">
+                <SelectValue placeholder="View By" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="day">By Session</SelectItem>
+                <SelectItem value="week">Weekly Avg</SelectItem>
+                <SelectItem value="month">Monthly Avg</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="h-[300px] w-full">
           <ChartContainer config={chartConfig} className="h-full w-full">
-            <AreaChart data={trends} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="fillAttendance" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} />
