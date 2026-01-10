@@ -48,40 +48,46 @@ export function QRScannerFlow({
 
   useEffect(() => {
     if (step === "SCAN") {
+      let isMounted = true;
+
       // Initialize scanner
       const scanner = new Html5QrcodeScanner(
         "reader",
         { fps: 10, qrbox: { width: 250, height: 250 } },
         /* verbose= */ false
       );
-      
+
       scanner.render(async (decodedText: string) => {
+        if (!isMounted) return;
+
+        setScannedCode(decodedText);
+        onScanSuccess(decodedText);
+
+        // Clear scanner and proceed to next step
         try {
-          // Clear the scanner to stop the camera and remove UI elements
           await scanner.clear();
-          scannerRef.current = null;
         } catch (error) {
           console.error("Failed to clear scanner:", error);
         }
 
-        setScannedCode(decodedText);
-        onScanSuccess(decodedText);
-        
-        // Add a delay before changing step to allow DOM cleanup
-        setTimeout(() => {
+        scannerRef.current = null;
+
+        // Change step after cleanup
+        if (isMounted) {
           if (mode === "LAB") {
             setStep("LIVENESS");
           } else {
             setStep("DONE");
           }
-        }, 300);
+        }
       }, (error: any) => {
         // handle scan error if needed
       });
-      
+
       scannerRef.current = scanner;
 
       return () => {
+        isMounted = false;
         if (scannerRef.current) {
           scannerRef.current.clear().catch((err) => console.error("Cleanup error:", err));
           scannerRef.current = null;
@@ -221,6 +227,7 @@ export function QRScannerFlow({
               Scan the dynamic QR code displayed by your instructor.
             </p>
           </div>
+          {/* Only render the reader div when in SCAN step to prevent DOM errors */}
           <div id="reader" className="overflow-hidden rounded-lg border bg-black/5"></div>
         </div>
       )}
