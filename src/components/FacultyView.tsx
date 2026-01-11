@@ -14,6 +14,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContai
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { startOfWeek, startOfMonth, format, isSameWeek, isSameMonth, parseISO } from "date-fns";
 import { FacultySessionHistory } from "./FacultySessionHistory";
+import GoogleIntegrations from "./GoogleIntegrations";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 
 export default function FacultyView() {
@@ -42,10 +43,11 @@ export default function FacultyView() {
       </div>
 
       <Tabs defaultValue="sessions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-[600px]">
+        <TabsList className="grid w-full grid-cols-4 max-w-[800px]">
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
         </TabsList>
         <TabsContent value="sessions" className="space-y-4 mt-4">
           <div className="flex items-center gap-4">
@@ -88,6 +90,15 @@ export default function FacultyView() {
           ) : (
             <div className="text-center p-8 text-muted-foreground">
               Select a course to view history
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="integrations" className="mt-4">
+          {selectedCourseId ? (
+            <GoogleIntegrations courseId={selectedCourseId as Id<"courses">} />
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              Select a course to manage integrations
             </div>
           )}
         </TabsContent>

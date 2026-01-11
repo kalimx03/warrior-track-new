@@ -13,6 +13,8 @@ import type * as auth from "../auth.js";
 import type * as auth_emailOtp from "../auth/emailOtp.js";
 import type * as courses from "../courses.js";
 import type * as email from "../email.js";
+import type * as googleIntegrations from "../googleIntegrations.js";
+import type * as googleIntegrationsHelpers from "../googleIntegrationsHelpers.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as notifications from "../notifications.js";
@@ -32,6 +34,8 @@ declare const fullApi: ApiFromModules<{
   "auth/emailOtp": typeof auth_emailOtp;
   courses: typeof courses;
   email: typeof email;
+  googleIntegrations: typeof googleIntegrations;
+  googleIntegrationsHelpers: typeof googleIntegrationsHelpers;
   helpers: typeof helpers;
   http: typeof http;
   notifications: typeof notifications;

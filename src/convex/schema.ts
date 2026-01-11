@@ -86,6 +86,16 @@ const schema = defineSchema(
       code: v.string(),
       expiresAt: v.number(),
     }).index("by_email", ["email"]),
+
+    googleIntegrations: defineTable({
+      userId: v.id("users"),
+      provider: v.union(v.literal("calendar"), v.literal("sheets"), v.literal("drive")),
+      accessToken: v.string(),
+      refreshToken: v.string(),
+      expiresAt: v.number(),
+      email: v.optional(v.string()),
+    }).index("by_user", ["userId"])
+      .index("by_user_and_provider", ["userId", "provider"]),
   },
   {
     schemaValidation: false,
