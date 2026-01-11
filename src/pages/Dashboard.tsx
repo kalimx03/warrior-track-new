@@ -66,7 +66,7 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="h-6 w-6 text-primary" />
-            <span className="font-bold text-lg tracking-tight">LOKYODHA</span>
+            <span className="font-bold text-lg tracking-tight">Team Zenith</span>
           </div>
           
           <div className="flex items-center gap-4">
