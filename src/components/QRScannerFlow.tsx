@@ -49,6 +49,7 @@ export function QRScannerFlow({
   useEffect(() => {
     if (step === "SCAN") {
       let isMounted = true;
+      let isScanning = false;
 
       // Initialize scanner
       const scanner = new Html5QrcodeScanner(
@@ -57,20 +58,23 @@ export function QRScannerFlow({
         /* verbose= */ false
       );
 
-      scanner.render(async (decodedText: string) => {
-        if (!isMounted) return;
+      const handleSuccess = async (decodedText: string) => {
+        if (!isMounted || isScanning) return;
+        isScanning = true;
 
         setScannedCode(decodedText);
         onScanSuccess(decodedText);
 
-        // Clear scanner and proceed to next step
+        // Stop scanner first to prevent further callbacks
         try {
           await scanner.clear();
+          scannerRef.current = null;
         } catch (error) {
-          console.error("Failed to clear scanner:", error);
+          // Silently handle cleanup errors
         }
 
-        scannerRef.current = null;
+        // Small delay to ensure DOM cleanup before state change
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Change step after cleanup
         if (isMounted) {
@@ -80,16 +84,24 @@ export function QRScannerFlow({
             setStep("DONE");
           }
         }
-      }, (error: any) => {
-        // handle scan error if needed
-      });
+      };
 
-      scannerRef.current = scanner;
+      try {
+        scanner.render(handleSuccess, () => {
+          // Silently handle scan errors
+        });
+        scannerRef.current = scanner;
+      } catch (error) {
+        console.error("Failed to initialize scanner:", error);
+      }
 
       return () => {
         isMounted = false;
+        isScanning = false;
         if (scannerRef.current) {
-          scannerRef.current.clear().catch((err) => console.error("Cleanup error:", err));
+          scannerRef.current.clear().catch(() => {
+            // Silently handle cleanup errors
+          });
           scannerRef.current = null;
         }
       };
